@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  assets       Asset[]
+  accounts     Account[]
+  transactions Transaction[]
+}
+
+model Asset {
+  id        String   @id @default(uuid())
+  name      String
+  type      String // e.g., "Cash", "Stock", "Real Estate"
+  amount    Decimal  @db.Decimal(20, 2)
+  currency  String   @default("KRW")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  name      String
+  type      String // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  entries   Entry[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Transaction {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  description String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  entries     Entry[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Entry {
+  id            String      @id @default(uuid())
+  amount        Decimal     @db.Decimal(20, 2) // Positive for Debit, Negative for Credit (or vice versa depending on account type)
+  accountId     String
+  account       Account     @relation(fields: [accountId], references: [id])
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([accountId])
+  @@index([transactionId])
+}

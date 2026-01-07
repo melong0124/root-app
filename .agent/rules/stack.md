@@ -15,6 +15,11 @@ trigger: always_on
 - **Validation:** Zod (Essential for Action data validation)
 - **Charts:** Recharts (for Financial Data Visualization)
 
+## 🗄️ Database & Backend (Supabase)
+- **ORM:** Prisma 또는 Drizzle ORM을 사용하여 타입 안전성을 확보한다.
+- **Auth:** Supabase Auth를 사용하며, Remix의 `loader`에서 세션을 체크한다.
+- **Security:** 모든 테이블에 RLS(Row Level Security)를 설정하여 본인의 자산 데이터만 조회 가능하도록 한다.
+
 ## 📏 Coding Standards & Rules
 1. **Full-stack Patterns:** 데이터 읽기는 `loader`, 쓰기(POST/PUT/DELETE)는 `action` 함수 내에서 처리한다.
 2. **Form Handling:** 브라우저 기본 기능을 활용하는 Remix `<Form>` 컴포넌트를 우선 사용한다.
