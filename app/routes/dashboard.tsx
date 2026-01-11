@@ -4,7 +4,7 @@ import { prisma } from "~/db.server";
 import { YearSelector } from "~/components/year-selector";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, LabelList } from "recharts";
 
 // --- Types & Enums ---
 
@@ -33,19 +33,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const now = new Date();
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
-    // Fetch User with assets
+    // Fetch User with assets and ALL values to calculate YoY and History
     const user = await prisma.user.findUnique({
         where: { email: "test@example.com" },
         include: {
             assets: {
                 include: {
                     values: {
-                        where: {
-                            date: {
-                                gte: new Date(year, 0, 1), // January 1st
-                                lte: new Date(year, 11, 31), // December 31st
-                            }
-                        },
+                        orderBy: { date: 'asc' }
                     },
                 },
             },
@@ -54,7 +49,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     if (!user) throw new Error("User not found");
 
-    // Initialize monthly data structure
+    // Initialize monthly data for the selected year
     const monthlyData: Array<{
         month: string;
         monthNumber: number;
@@ -66,14 +61,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const monthNames = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
 
-    // Process each month (1-12)
-    for (let month = 1; month <= 12; month++) {
+    // Determine the last month to show for the selected year
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    const lastMonthToProcess = (year < currentYear) ? 12 : (year === currentYear) ? currentMonth : 0;
+
+    // Process each month up to the last available month
+    for (let month = 1; month <= lastMonthToProcess; month++) {
         const targetDate = new Date(year, month - 1, 1);
 
         let totalAssets = 0;
         let totalLiabilities = 0;
 
-        // Calculate totals for this month
         user.assets.forEach((asset) => {
             const valueRecord = asset.values.find((v: any) =>
                 v.date.getTime() === targetDate.getTime()
@@ -88,45 +87,117 @@ export async function loader({ request }: LoaderFunctionArgs) {
             }
         });
 
-        const netWorth = totalAssets - totalLiabilities;
-
         monthlyData.push({
             month: monthNames[month - 1],
             monthNumber: month,
             totalAssets,
             totalLiabilities,
-            netWorth,
-            netWorthChange: 0, // Will be calculated after all months are processed
+            netWorth: totalAssets - totalLiabilities,
+            netWorthChange: 0,
         });
     }
 
-    // Calculate month-over-month changes
+    // Handle empty data for future years
+    if (monthlyData.length === 0) {
+        return {
+            year,
+            monthlyData: [],
+            yearEnd: { totalAssets: 0, totalLiabilities: 0, netWorth: 0 },
+            prevYearEnd: { totalAssets: 0, totalLiabilities: 0, netWorth: 0 },
+            yoy: { assets: 0, liabilities: 0, netWorth: 0 },
+            yearlyHistory: [],
+            userId: user.id,
+        };
+    }
+
+    // Calculate month-over-month changes within the selected year
     for (let i = 0; i < monthlyData.length; i++) {
-        if (i === 0) {
-            // For the first month, compare with previous year's December if available
-            monthlyData[i].netWorthChange = 0;
-        } else {
+        if (i > 0) {
             monthlyData[i].netWorthChange = monthlyData[i].netWorth - monthlyData[i - 1].netWorth;
+        } else {
+            // Compare Jan with previous year's Dec
+            const prevDecDate = new Date(year - 1, 11, 1);
+            let prevDecNetWorth = 0;
+            user.assets.forEach(asset => {
+                const val = asset.values.find(v => v.date.getTime() === prevDecDate.getTime());
+                const amt = val?.amount?.toNumber() ?? 0;
+                if (isLiability(asset.category as AssetCategory)) prevDecNetWorth -= amt;
+                else prevDecNetWorth += amt;
+            });
+            monthlyData[i].netWorthChange = monthlyData[i].netWorth - prevDecNetWorth;
         }
     }
 
-    // Calculate yearly summary
-    const yearlyTotalAssets = monthlyData.reduce((sum, m) => sum + m.totalAssets, 0) / 12;
-    const yearlyTotalLiabilities = monthlyData.reduce((sum, m) => sum + m.totalLiabilities, 0) / 12;
-    const yearlyNetWorth = yearlyTotalAssets - yearlyTotalLiabilities;
+    // Calculate Latest available values for the selected year (Year-to-Date or Year-End)
+    const currentYearEnd = monthlyData[monthlyData.length - 1];
 
-    // Get last month's data for comparison
-    const lastMonthData = monthlyData[11]; // December
-    const firstMonthData = monthlyData[0]; // January
-    const yearChange = lastMonthData.netWorth - firstMonthData.netWorth;
+    // Calculate Year-End (December) values for the PREVIOUS year
+    let prevYearEndAssets = 0;
+    let prevYearEndLiabilities = 0;
+    const prevDecDate = new Date(year - 1, 11, 1);
+
+    user.assets.forEach((asset) => {
+        const valueRecord = asset.values.find((v: any) =>
+            v.date.getTime() === prevDecDate.getTime()
+        );
+        const assetValue = valueRecord?.amount?.toNumber() ?? 0;
+
+        if (isLiability(asset.category as AssetCategory)) {
+            prevYearEndLiabilities += assetValue;
+        } else {
+            prevYearEndAssets += assetValue;
+        }
+    });
+
+    const prevYearEndNetWorth = prevYearEndAssets - prevYearEndLiabilities;
+
+    // Calculate YoY Changes
+    const yoyAssetsChange = currentYearEnd.totalAssets - prevYearEndAssets;
+    const yoyLiabilitiesChange = currentYearEnd.totalLiabilities - prevYearEndLiabilities;
+    const yoyNetWorthChange = currentYearEnd.netWorth - prevYearEndNetWorth;
+
+    // Gather Yearly History (Latest available of each year)
+    const yearsWithData = Array.from(new Set(
+        user.assets.flatMap(a => a.values.map(v => v.date.getFullYear()))
+    )).sort((a, b) => b - a); // Newest first
+
+    const yearlyHistory = yearsWithData.map(y => {
+        // If it's current year, use current month, else use Dec
+        const targetMonth = (y === currentYear) ? currentMonth - 1 : 11;
+        const targetDate = new Date(y, targetMonth, 1);
+
+        let assets = 0;
+        let liabilities = 0;
+        user.assets.forEach(asset => {
+            const val = asset.values.find(v => v.date.getTime() === targetDate.getTime());
+            const amt = val?.amount?.toNumber() ?? 0;
+            if (isLiability(asset.category as AssetCategory)) liabilities += amt;
+            else assets += amt;
+        });
+        return {
+            year: y,
+            assets,
+            liabilities,
+            netWorth: assets - liabilities,
+            label: y === currentYear ? `${y} (현재)` : `${y} (기말)`
+        };
+    });
 
     return {
         year,
         monthlyData,
-        yearlyTotalAssets,
-        yearlyTotalLiabilities,
-        yearlyNetWorth,
-        yearChange,
+        yearEnd: currentYearEnd,
+        prevYearEnd: {
+            totalAssets: prevYearEndAssets,
+            totalLiabilities: prevYearEndLiabilities,
+            netWorth: prevYearEndNetWorth
+        },
+        yoy: {
+            assets: yoyAssetsChange,
+            liabilities: yoyLiabilitiesChange,
+            netWorth: yoyNetWorthChange
+        },
+        yearlyHistory,
         userId: user.id,
     };
 }
@@ -137,10 +208,9 @@ export default function DashboardPage() {
     const {
         year,
         monthlyData,
-        yearlyTotalAssets,
-        yearlyTotalLiabilities,
-        yearlyNetWorth,
-        yearChange,
+        yearEnd,
+        yoy,
+        yearlyHistory,
     } = useLoaderData<typeof loader>();
 
     // Custom tooltip for the chart
@@ -183,18 +253,28 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="border-none bg-primary/5 shadow-none">
                     <CardContent className="p-4">
-                        <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1">연평균 자산</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1">{year}년 기말 자산</p>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${yoy.assets >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                                YoY {yoy.assets >= 0 ? '+' : ''}{new Intl.NumberFormat('ko-KR', { notation: 'compact' }).format(yoy.assets)}
+                            </span>
+                        </div>
                         <div className="flex items-baseline gap-2">
-                            <h3 className="text-2xl font-bold text-primary">{new Intl.NumberFormat('ko-KR').format(yearlyTotalAssets)}</h3>
+                            <h3 className="text-2xl font-bold text-primary">{new Intl.NumberFormat('ko-KR').format(yearEnd.totalAssets)}</h3>
                             <span className="text-xs text-muted-foreground">원</span>
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="border-none bg-red-500/5 shadow-none">
                     <CardContent className="p-4">
-                        <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-1">연평균 부채</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-1">{year}년 기말 부채</p>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${yoy.liabilities <= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                                YoY {yoy.liabilities >= 0 ? '+' : ''}{new Intl.NumberFormat('ko-KR', { notation: 'compact' }).format(yoy.liabilities)}
+                            </span>
+                        </div>
                         <div className="flex items-baseline gap-2">
-                            <h3 className="text-2xl font-bold text-red-600">{new Intl.NumberFormat('ko-KR').format(yearlyTotalLiabilities)}</h3>
+                            <h3 className="text-2xl font-bold text-red-600">{new Intl.NumberFormat('ko-KR').format(yearEnd.totalLiabilities)}</h3>
                             <span className="text-xs text-muted-foreground">원</span>
                         </div>
                     </CardContent>
@@ -202,18 +282,18 @@ export default function DashboardPage() {
                 <Card className="border-none bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-lg shadow-slate-900/10">
                     <CardContent className="p-4">
                         <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">연평균 순자산</p>
-                            {yearlyNetWorth >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-400" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">{year}년 기말 순자산</p>
+                            {yoy.netWorth >= 0 ? <TrendingUp className="w-4 h-4 text-emerald-400" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
                         </div>
                         <div className="flex items-baseline gap-2">
-                            <h3 className="text-2xl font-bold">{new Intl.NumberFormat('ko-KR').format(yearlyNetWorth)}</h3>
+                            <h3 className="text-2xl font-bold">{new Intl.NumberFormat('ko-KR').format(yearEnd.netWorth)}</h3>
                             <span className="text-xs text-slate-400">원</span>
                         </div>
                         <div className="flex flex-col mt-2">
-                            <p className={`text-xs flex items-center gap-1 ${yearChange > 0 ? 'text-emerald-400' : yearChange < 0 ? 'text-red-400' : 'text-slate-400'
+                            <p className={`text-xs flex items-center gap-1 ${yoy.netWorth > 0 ? 'text-emerald-400' : yoy.netWorth < 0 ? 'text-red-400' : 'text-slate-400'
                                 }`}>
-                                {yearChange > 0 ? <TrendingUp className="w-3 h-3" /> : yearChange < 0 ? <TrendingDown className="w-3 h-3" /> : null}
-                                연간 변화: {yearChange > 0 ? '+' : ''}{new Intl.NumberFormat('ko-KR').format(yearChange)} 원
+                                {yoy.netWorth > 0 ? <TrendingUp className="w-3 h-3" /> : yoy.netWorth < 0 ? <TrendingDown className="w-3 h-3" /> : null}
+                                전년대비: {yoy.netWorth > 0 ? '+' : ''}{new Intl.NumberFormat('ko-KR').format(yoy.netWorth)} 원
                             </p>
                         </div>
                     </CardContent>
@@ -255,6 +335,19 @@ export default function DashboardPage() {
                                         fill={entry.netWorthChange > 0 ? '#10b981' : entry.netWorthChange < 0 ? '#ef4444' : '#94a3b8'}
                                     />
                                 ))}
+                                <LabelList
+                                    dataKey="netWorthChange"
+                                    position="top"
+                                    formatter={(value: any) => {
+                                        if (value === undefined || value === null || value === 0) return "";
+                                        const numValue = Number(value);
+                                        return (numValue > 0 ? "+" : "") + new Intl.NumberFormat('ko-KR', {
+                                            notation: 'compact',
+                                            compactDisplay: 'short'
+                                        }).format(numValue);
+                                    }}
+                                    style={{ fill: 'currentColor', fontSize: '10px', fontWeight: '600' }}
+                                />
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
@@ -264,7 +357,7 @@ export default function DashboardPage() {
             {/* Monthly Details Table */}
             <Card className="shadow-sm border">
                 <CardHeader className="bg-muted/30 py-4 border-b">
-                    <CardTitle className="text-lg font-bold">월별 상세 내역</CardTitle>
+                    <CardTitle className="text-lg font-bold">{year}년 월별 상세 내역</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
@@ -275,6 +368,7 @@ export default function DashboardPage() {
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">자산</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">부채</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">순자산</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider text-emerald-600">전월대비</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
@@ -282,16 +376,70 @@ export default function DashboardPage() {
                                     <tr key={data.monthNumber} className="hover:bg-muted/10 transition-colors">
                                         <td className="px-4 py-3 text-sm font-medium">{data.month}</td>
                                         <td className="px-4 py-3 text-sm text-right font-mono">
-                                            {new Intl.NumberFormat('ko-KR').format(data.totalAssets)} 원
+                                            {new Intl.NumberFormat('ko-KR').format(data.totalAssets)}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-right font-mono text-red-600">
-                                            {new Intl.NumberFormat('ko-KR').format(data.totalLiabilities)} 원
+                                            {new Intl.NumberFormat('ko-KR').format(data.totalLiabilities)}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-right font-mono font-bold">
-                                            {new Intl.NumberFormat('ko-KR').format(data.netWorth)} 원
+                                            {new Intl.NumberFormat('ko-KR').format(data.netWorth)}
+                                        </td>
+                                        <td className={`px-4 py-3 text-sm text-right font-mono font-semibold ${data.netWorthChange > 0 ? 'text-emerald-600' : data.netWorthChange < 0 ? 'text-red-600' : 'text-muted-foreground'
+                                            }`}>
+                                            {data.netWorthChange > 0 ? '+' : ''}{new Intl.NumberFormat('ko-KR').format(data.netWorthChange)}
                                         </td>
                                     </tr>
                                 ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Yearly History Section */}
+            <Card className="shadow-sm border">
+                <CardHeader className="bg-muted/30 py-4 border-b">
+                    <CardTitle className="text-lg font-bold">연도별 기말 성과 (12월 기준)</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-muted/20 border-b">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">연도</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">기말 자산</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">기말 부채</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">기말 순자산</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">전년대비</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {yearlyHistory.map((h, idx) => {
+                                    const prevYearData = yearlyHistory[idx + 1];
+                                    const yoyChange = prevYearData ? h.netWorth - prevYearData.netWorth : 0;
+                                    return (
+                                        <tr key={h.year} className={`hover:bg-muted/10 transition-colors ${h.year === year ? 'bg-primary/5 font-bold' : ''}`}>
+                                            <td className="px-4 py-3 text-sm font-medium">{h.label}</td>
+                                            <td className="px-4 py-3 text-sm text-right font-mono">
+                                                {new Intl.NumberFormat('ko-KR').format(h.assets)}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-right font-mono text-red-600">
+                                                {new Intl.NumberFormat('ko-KR').format(h.liabilities)}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-right font-mono">
+                                                {new Intl.NumberFormat('ko-KR').format(h.netWorth)}
+                                            </td>
+                                            <td className={`px-4 py-3 text-sm text-right font-mono ${yoyChange > 0 ? 'text-emerald-600' : yoyChange < 0 ? 'text-red-600' : 'text-muted-foreground'
+                                                }`}>
+                                                {prevYearData ? (
+                                                    <>
+                                                        {yoyChange > 0 ? '+' : ''}{new Intl.NumberFormat('ko-KR').format(yoyChange)}
+                                                    </>
+                                                ) : '-'}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
