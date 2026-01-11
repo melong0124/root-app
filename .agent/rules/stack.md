@@ -9,7 +9,10 @@ trigger: always_on
 - **Local Git Config:** 반드시 로컬 설정(`git config --local`)을 사용하여 회사 계정과 격리한다.
   - `user.name`: `melong0124`
   - `user.email`: `melong0124@gmail.com`
-- **Remote URL:** 인증 오류 방지를 위해 유저명을 포함한 URL 권장: `https://melong0124@github.com/melong0124/root-app.git`
+- **Authentication & Push: 
+  - 기본적으로 `gh auth switch`를 통해 계정을 전환하여 사용할 수 있으나, 인증 토큰 충돌 발생 시 아래 명령어로 강제 푸시한다.
+  - `git push -u "https://$(gh auth token)@github.com/melong0124/root-app.git" main` 
+  - **Email Privacy:** GitHub 설정에서 "Block command line pushes that expose my email" 옵션이 켜져 있을 경우 푸시가 거부될 수 있으므로 필요 시 해제한다.
 
 ## 🛠 Core Technology Stack
 - **Framework:** Remix (React Router v7 Framework mode)
