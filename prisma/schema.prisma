@@ -22,18 +22,42 @@ model User {
   transactions Transaction[]
 }
 
+enum AssetCategory {
+  CASH
+  STOCK
+  PENSION
+  REAL_ESTATE
+  LOAN
+  ESO
+  RENTAL
+}
+
 model Asset {
-  id        String   @id @default(uuid())
+  id        String          @id @default(uuid())
   name      String
-  type      String // e.g., "Cash", "Stock", "Real Estate"
-  amount    Decimal  @db.Decimal(20, 2)
-  currency  String   @default("KRW")
+  category  AssetCategory
+  currency  String          @default("KRW")
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User            @relation(fields: [userId], references: [id])
+  values    AssetValue[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([userId])
+}
+
+model AssetValue {
+  id        String   @id @default(uuid())
+  amount    Decimal  @db.Decimal(20, 2)
+  date      DateTime // Representative date for the month (e.g., 1st of the month)
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
+  @@unique([assetId, date])
+  @@index([assetId])
+  @@index([date])
 }
 
 model Account {
@@ -49,15 +73,22 @@ model Account {
   @@index([userId])
 }
 
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
 model Transaction {
-  id          String   @id @default(uuid())
-  date        DateTime @default(now())
+  id          String          @id @default(uuid())
+  date        DateTime        @default(now())
   description String
+  type        TransactionType @default(EXPENSE)
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User            @relation(fields: [userId], references: [id])
   entries     Entry[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@index([userId])
 }

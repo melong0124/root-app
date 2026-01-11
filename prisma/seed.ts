@@ -35,6 +35,9 @@ async function main() {
         { name: "생활용품", type: "EXPENSE" },
         { name: "취미/여가", type: "EXPENSE" },
         { name: "기타 비용", type: "EXPENSE" },
+        // Revenue Accounts
+        { name: "월급", type: "REVENUE" },
+        { name: "이자수익", type: "REVENUE" },
     ];
 
     for (const account of defaultAccounts) {

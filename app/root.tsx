@@ -34,6 +34,8 @@ export async function loader() {
   };
 }
 
+import { MobileNav } from "./components/mobile-nav";
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useLoaderData<typeof loader>();
 
@@ -41,15 +43,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
         <Meta />
         <Links />
       </head>
-      <body className="flex min-h-screen">
-        <Sidebar />
-        <main className="flex-1 h-screen overflow-y-auto bg-background">
+      <body className="flex min-h-screen bg-background text-foreground">
+        <div className="hidden md:flex">
+          <Sidebar />
+        </div>
+        <main className="flex-1 h-[100dvh] overflow-y-auto w-full pb-16 md:pb-0">
           {children}
         </main>
+        <MobileNav />
         <script
           dangerouslySetInnerHTML={{
             __html: `window.ENV = ${JSON.stringify(data?.ENV)}`,

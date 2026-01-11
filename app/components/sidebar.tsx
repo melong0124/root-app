@@ -1,9 +1,10 @@
 import { NavLink } from "react-router";
-import { Wallet, PieChart, Settings, LayoutDashboard } from "lucide-react";
+import { Wallet, PieChart, Settings, LayoutDashboard, BarChart3, Home } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 const menuItems = [
-    { icon: LayoutDashboard, label: "대시보드", to: "/" },
+    { icon: Home, label: "홈", to: "/" },
+    { icon: BarChart3, label: "대시보드", to: "/dashboard" },
     { icon: Wallet, label: "가계부", to: "/ledger" },
     { icon: PieChart, label: "자산 현황", to: "/assets" },
     { icon: Settings, label: "설정", to: "/settings" },

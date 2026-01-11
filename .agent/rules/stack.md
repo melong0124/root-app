@@ -4,6 +4,13 @@ trigger: always_on
 
 # Project Context: Asset Management Web (Remix / React Router v7)
 
+## 🔐 Git Identity & Environment
+- **GitHub Account:** `melong0124` (Personal Account)
+- **Local Git Config:** 반드시 로컬 설정(`git config --local`)을 사용하여 회사 계정과 격리한다.
+  - `user.name`: `melong0124`
+  - `user.email`: `melong0124@gmail.com`
+- **Remote URL:** 인증 오류 방지를 위해 유저명을 포함한 URL 권장: `https://melong0124@github.com/melong0124/root-app.git`
+
 ## 🛠 Core Technology Stack
 - **Framework:** Remix (React Router v7 Framework mode)
 - **Runtime:** Node.js (Vite-based compiler)
