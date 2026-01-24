@@ -25,15 +25,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     const url = new URL(request.url);
     const yearParam = url.searchParams.get("year");
-    const currentYear = new Date().getFullYear();
-    const year = yearParam ? parseInt(yearParam) : currentYear;
+    const monthParam = url.searchParams.get("month");
+
+    const now = new Date();
+    const year = yearParam ? parseInt(yearParam) : now.getFullYear();
+    const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1; // 1-indexed
+
+    // 종료일: 선택한 달의 마지막 날
+    const endDate = new Date(year, month, 1);
+    // 시작일: 12개월 전 (종료일로부터 12개월 전)
+    const startDate = new Date(year, month - 12, 1);
 
     // 모든 거래 내역 조회 (사용자 구분 없이)
     const transactions = await prisma.transaction.findMany({
         where: {
             date: {
-                gte: new Date(year, 0, 1),
-                lt: new Date(year + 1, 0, 1),
+                gte: startDate,
+                lt: endDate,
             }
         },
         include: {
@@ -41,46 +49,68 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
     });
 
-    // 월별 통계 계산
-    const monthlyStats: Record<number, MonthlyStats> = {};
+    // 월별 통계 계산을 위한 12개월 데이터 슬롯 생성
+    const stats: MonthlyStats[] = [];
     for (let i = 0; i < 12; i++) {
-        monthlyStats[i] = {
-            month: `${i + 1}월`,
-            monthFull: `${year}년 ${i + 1}월`,
+        const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        stats.push({
+            month: `${m + 1}월`,
+            monthFull: `${y}년 ${m + 1}월`,
             income: 0,
             expense: 0,
             netProfit: 0
-        };
+        });
     }
 
     transactions.forEach(tx => {
-        const month = tx.date.getMonth();
-        const incomeEntry = tx.entries.find(e => Number(e.amount) > 0);
-        const amount = incomeEntry ? Number(incomeEntry.amount) : 0;
+        // tx.date를 startDateからの月数に変換
+        const txDate = new Date(tx.date);
+        const diffMonths = (txDate.getFullYear() - startDate.getFullYear()) * 12 + (txDate.getMonth() - startDate.getMonth());
 
-        if (tx.type === "INCOME") {
-            monthlyStats[month].income += amount;
-        } else if (tx.type === "EXPENSE") {
-            monthlyStats[month].expense += amount;
+        if (diffMonths >= 0 && diffMonths < 12) {
+            const incomeEntry = tx.entries.find(e => Number(e.amount) > 0);
+            const amount = incomeEntry ? Number(incomeEntry.amount) : 0;
+
+            if (tx.type === "INCOME") {
+                stats[diffMonths].income += amount;
+            } else if (tx.type === "EXPENSE") {
+                stats[diffMonths].expense += amount;
+            }
+            stats[diffMonths].netProfit = stats[diffMonths].income - stats[diffMonths].expense;
         }
-        monthlyStats[month].netProfit = monthlyStats[month].income - monthlyStats[month].expense;
     });
 
     return {
         year,
-        stats: Object.values(monthlyStats)
+        month,
+        stats
     };
 }
 
 // --- Component ---
 
 export default function LedgerDashboard() {
-    const { year, stats } = useLoaderData<typeof loader>();
+    const { year, month, stats } = useLoaderData<typeof loader>();
     const [searchParams, setSearchParams] = useSearchParams();
 
-    const changeYear = (delta: number) => {
-        const newYear = year + delta;
-        setSearchParams({ year: newYear.toString() });
+    const changeMonth = (delta: number) => {
+        let newMonth = month + delta;
+        let newYear = year;
+
+        if (newMonth > 12) {
+            newMonth = 1;
+            newYear++;
+        } else if (newMonth < 1) {
+            newMonth = 12;
+            newYear--;
+        }
+
+        setSearchParams({
+            year: newYear.toString(),
+            month: newMonth.toString()
+        });
     };
 
     return (
@@ -92,16 +122,16 @@ export default function LedgerDashboard() {
                     </div>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">가계부 통계</h1>
-                        <p className="text-sm text-muted-foreground">연간 수입 및 지출 현황을 분석합니다.</p>
+                        <p className="text-sm text-muted-foreground">최근 12개월의 수입 및 지출 현황을 분석합니다.</p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg">
-                    <Button variant="ghost" size="icon" onClick={() => changeYear(-1)}>
+                    <Button variant="ghost" size="icon" onClick={() => changeMonth(-1)}>
                         <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <span className="px-4 font-bold text-lg">{year}년</span>
-                    <Button variant="ghost" size="icon" onClick={() => changeYear(1)}>
+                    <span className="px-4 font-bold text-lg">{year}년 {month}월</span>
+                    <Button variant="ghost" size="icon" onClick={() => changeMonth(1)}>
                         <ChevronRight className="w-4 h-4" />
                     </Button>
                 </div>
@@ -110,7 +140,7 @@ export default function LedgerDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="border-none bg-blue-50 dark:bg-blue-900/10">
                     <CardContent className="pt-6">
-                        <p className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">연간 총 수입</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">12개월 총 수입</p>
                         <h3 className="text-2xl font-bold text-blue-700">
                             {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(stats.reduce((acc, curr) => acc + curr.income, 0))}
                         </h3>
@@ -118,7 +148,7 @@ export default function LedgerDashboard() {
                 </Card>
                 <Card className="border-none bg-red-50 dark:bg-red-900/10">
                     <CardContent className="pt-6">
-                        <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-1">연간 총 지출</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-1">12개월 총 지출</p>
                         <h3 className="text-2xl font-bold text-red-700">
                             {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(stats.reduce((acc, curr) => acc + curr.expense, 0))}
                         </h3>
@@ -126,7 +156,7 @@ export default function LedgerDashboard() {
                 </Card>
                 <Card className="border-none bg-primary/5">
                     <CardContent className="pt-6">
-                        <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1">연간 순손익</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1">12개월 순손익</p>
                         <h3 className="text-2xl font-bold text-primary">
                             {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(stats.reduce((acc, curr) => acc + curr.netProfit, 0))}
                         </h3>
