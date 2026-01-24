@@ -8,7 +8,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Settings as SettingsIcon, Plus, Edit2, Trash2, Save, X, Loader2, CheckCircle2, AlertCircle, Wallet, Landmark, Building, Coins, Banknote, Briefcase, Key } from "lucide-react";
 import { prisma } from "~/db.server";
 import { useState } from "react";
-import { AssetCategory } from "@prisma/client";
+// Keep in sync with Prisma Enum to avoid ESM import issues on Vercel
+enum AssetCategory {
+    CASH = "CASH",
+    STOCK = "STOCK",
+    PENSION = "PENSION",
+    REAL_ESTATE = "REAL_ESTATE",
+    LOAN = "LOAN",
+    ESO = "ESO",
+    RENTAL = "RENTAL",
+}
 import { requireAuth } from "~/lib/session.server";
 
 // --- Constants ---
