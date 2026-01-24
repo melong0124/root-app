@@ -61,8 +61,15 @@ export async function getSupabaseSession(request: Request): Promise<Session | nu
 /**
  * 인증이 필요한 라우트에서 사용하는 헬퍼 함수
  * 로그인하지 않은 경우 로그인 페이지로 리다이렉트
+ * DEV_MODE=true인 경우 인증을 건너뜁니다 (로컬 개발용)
  */
 export async function requireAuth(request: Request) {
+    // 개발 모드에서는 인증 건너뛰기
+    if (process.env.DEV_MODE === 'true') {
+        console.log('🔓 DEV_MODE: Authentication skipped');
+        return null; // 개발 모드에서는 세션 없이 진행
+    }
+
     const session = await getSupabaseSession(request);
 
     if (!session) {
