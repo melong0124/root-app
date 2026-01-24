@@ -2,6 +2,10 @@ import { type RouteConfig, index, route } from "@react-router/dev/routes";
 
 export default [
     index("routes/ledger.tsx"),
+    route("login", "routes/login.tsx"),
+    route("auth/callback", "routes/auth.callback.tsx"),
+    route("logout", "routes/logout.tsx"),
+    route("api/auth/session", "routes/api.auth.session.tsx"),
     route("dashboard", "routes/dashboard.tsx"),
     route("ledger-dashboard", "routes/ledger-dashboard.tsx"),
     route("assets", "routes/assets.tsx"),

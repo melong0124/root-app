@@ -9,6 +9,7 @@ import { Settings as SettingsIcon, Plus, Edit2, Trash2, Save, X, Loader2, CheckC
 import { prisma } from "~/db.server";
 import { useState } from "react";
 import { AssetCategory } from "@prisma/client";
+import { requireAuth } from "~/lib/session.server";
 
 // --- Constants ---
 const CATEGORY_LABELS: Record<AssetCategory, string> = {
@@ -32,26 +33,30 @@ const CATEGORY_ICONS: Record<AssetCategory, any> = {
 };
 
 // --- Loader ---
-export async function loader() {
-    const user = await prisma.user.findUnique({
-        where: { email: "test@example.com" },
+export async function loader({ request }: Route.LoaderArgs) {
+    // 인증 체크
+    await requireAuth(request);
+
+    // 모든 계정 조회
+    const accounts = await prisma.account.findMany({
         include: {
-            accounts: {
-                include: {
-                    _count: {
-                        select: { entries: true }
-                    }
-                }
-            },
-            assets: true, // Fetch assets
+            _count: {
+                select: { entries: true }
+            }
         },
+        orderBy: { name: 'asc' }
     });
 
-    if (!user) {
-        throw new Error("User not found");
-    }
+    // 모든 자산 항목 조회
+    const assets = await prisma.asset.findMany({
+        orderBy: { name: 'asc' }
+    });
 
-    const assetAccounts = user.accounts
+    // 첫 번째 사용자 ID 가져오기 (데이터 생성용)
+    const firstUser = await prisma.user.findFirst();
+    if (!firstUser) throw new Error("No user found in database");
+
+    const assetAccounts = accounts
         .filter((a) => a.type === "ASSET" || a.type === "LIABILITY")
         .map((a) => ({
             id: a.id,
@@ -60,7 +65,7 @@ export async function loader() {
             usageCount: a._count.entries
         }));
 
-    const expenseAccounts = user.accounts
+    const expenseAccounts = accounts
         .filter((a) => a.type === "EXPENSE")
         .map((a) => ({
             id: a.id,
@@ -69,7 +74,7 @@ export async function loader() {
             usageCount: a._count.entries
         }));
 
-    const revenueAccounts = user.accounts
+    const revenueAccounts = accounts
         .filter((a) => a.type === "REVENUE")
         .map((a) => ({
             id: a.id,
@@ -79,9 +84,9 @@ export async function loader() {
         }));
 
     // Group assets by category
-    const assetsByCategory: Record<string, typeof user.assets> = {};
+    const assetsByCategory: Record<string, any[]> = {};
     Object.values(AssetCategory).forEach(cat => {
-        assetsByCategory[cat] = user.assets.filter(a => a.category === cat);
+        assetsByCategory[cat] = assets.filter(a => a.category === cat);
     });
 
     return {
@@ -89,7 +94,7 @@ export async function loader() {
         expenseAccounts,
         revenueAccounts,
         assetsByCategory,
-        userId: user.id
+        userId: firstUser.id
     };
 }
 

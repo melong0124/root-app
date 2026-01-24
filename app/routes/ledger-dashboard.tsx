@@ -1,10 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useSearchParams, useNavigate } from "react-router";
+import { useLoaderData, useSearchParams } from "react-router";
 import { prisma } from "~/db.server";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { ChevronLeft, ChevronRight, LayoutDashboard } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { requireAuth } from "~/lib/session.server";
 
 // --- Types ---
 
@@ -19,264 +20,176 @@ interface MonthlyStats {
 // --- Loader ---
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    // 인증 체크
+    await requireAuth(request);
+
     const url = new URL(request.url);
     const yearParam = url.searchParams.get("year");
-    const monthParam = url.searchParams.get("month");
+    const currentYear = new Date().getFullYear();
+    const year = yearParam ? parseInt(yearParam) : currentYear;
 
-    const now = new Date();
-    const endYear = yearParam ? parseInt(yearParam) : now.getFullYear();
-    const endMonth = monthParam ? parseInt(monthParam) : now.getMonth() + 1; // 1-12
-
-    // Set end date to the last day of the selected month
-    const endDate = new Date(endYear, endMonth, 0, 23, 59, 59, 999);
-    // Set start date to the first day of the month 11 months ago
-    const startDate = new Date(endYear, endMonth - 12, 1);
-
+    // 모든 거래 내역 조회 (사용자 구분 없이)
     const transactions = await prisma.transaction.findMany({
         where: {
-            user: { email: "test@example.com" },
             date: {
-                gte: startDate,
-                lte: endDate,
-            },
+                gte: new Date(year, 0, 1),
+                lt: new Date(year + 1, 0, 1),
+            }
         },
         include: {
-            entries: true,
-        },
-    });
-
-    const statsMap: Map<string, MonthlyStats> = new Map();
-
-    // Initialize the last 12 months
-    for (let i = 0; i < 12; i++) {
-        const d = new Date(endYear, endMonth - 12 + i, 1);
-        const year = d.getFullYear();
-        const month = d.getMonth() + 1;
-        const key = `${year}-${String(month).padStart(2, '0')}`;
-        statsMap.set(key, {
-            month: `${month}월`,
-            monthFull: `${year}년 ${month}월`,
-            income: 0,
-            expense: 0,
-            netProfit: 0,
-        });
-    }
-
-    transactions.forEach((tx) => {
-        const d = new Date(tx.date);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const stats = statsMap.get(key);
-        if (stats) {
-            // Calculate amount from entries. In this schema, amount is stored in entries.
-            // Based on ledger.tsx logic:
-            const debitEntry = tx.entries.find((e) => e.amount.toNumber() > 0);
-            const amount = debitEntry ? Math.abs(debitEntry.amount.toNumber()) : 0;
-
-            if (tx.type === "INCOME") {
-                stats.income += amount;
-                stats.netProfit += amount;
-            } else if (tx.type === "EXPENSE") {
-                stats.expense += amount;
-                stats.netProfit -= amount;
-            }
+            entries: true
         }
     });
 
-    const monthlyData = Array.from(statsMap.values());
+    // 월별 통계 계산
+    const monthlyStats: Record<number, MonthlyStats> = {};
+    for (let i = 0; i < 12; i++) {
+        monthlyStats[i] = {
+            month: `${i + 1}월`,
+            monthFull: `${year}년 ${i + 1}월`,
+            income: 0,
+            expense: 0,
+            netProfit: 0
+        };
+    }
+
+    transactions.forEach(tx => {
+        const month = tx.date.getMonth();
+        const incomeEntry = tx.entries.find(e => Number(e.amount) > 0);
+        const amount = incomeEntry ? Number(incomeEntry.amount) : 0;
+
+        if (tx.type === "INCOME") {
+            monthlyStats[month].income += amount;
+        } else if (tx.type === "EXPENSE") {
+            monthlyStats[month].expense += amount;
+        }
+        monthlyStats[month].netProfit = monthlyStats[month].income - monthlyStats[month].expense;
+    });
 
     return {
-        monthlyData,
-        endYear,
-        endMonth,
+        year,
+        stats: Object.values(monthlyStats)
     };
 }
 
 // --- Component ---
 
 export default function LedgerDashboard() {
-    const { monthlyData, endYear, endMonth } = useLoaderData<typeof loader>();
-    const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
+    const { year, stats } = useLoaderData<typeof loader>();
+    const [searchParams, setSearchParams] = useSearchParams();
 
-    const updateDate = (year: number, month: number) => {
-        const params = new URLSearchParams(searchParams);
-        params.set("year", year.toString());
-        params.set("month", month.toString());
-        navigate(`?${params.toString()}`);
-    };
-
-    const handlePrev = () => {
-        let newMonth = endMonth - 1;
-        let newYear = endYear;
-        if (newMonth === 0) {
-            newMonth = 12;
-            newYear--;
-        }
-        updateDate(newYear, newMonth);
-    };
-
-    const handleNext = () => {
-        let newMonth = endMonth + 1;
-        let newYear = endYear;
-        if (newMonth === 13) {
-            newMonth = 1;
-            newYear++;
-        }
-        updateDate(newYear, newMonth);
-    };
-
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('ko-KR', {
-            style: 'currency',
-            currency: 'KRW',
-            notation: 'compact',
-            maximumFractionDigits: 1
-        }).format(value);
-    };
-
-    const CustomTooltip = ({ active, payload, label }: any) => {
-        if (active && payload && payload.length) {
-            return (
-                <div className="bg-background border border-border rounded-lg shadow-md p-3">
-                    <p className="font-bold text-sm mb-1">{payload[0].payload.monthFull}</p>
-                    {payload.map((p: any, idx: number) => (
-                        <p key={idx} className="text-sm font-medium" style={{ color: p.fill }}>
-                            {p.name}: {new Intl.NumberFormat('ko-KR').format(p.value)}원
-                        </p>
-                    ))}
-                </div>
-            );
-        }
-        return null;
+    const changeYear = (delta: number) => {
+        const newYear = year + delta;
+        setSearchParams({ year: newYear.toString() });
     };
 
     return (
-        <div className="p-4 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="p-4 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-card p-6 rounded-xl border shadow-sm">
                 <div className="flex items-center gap-3">
-                    <div className="bg-primary/10 p-2 rounded-lg text-primary">
-                        <LayoutDashboard className="w-6 h-6" />
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                        <LayoutDashboard className="w-6 h-6 text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">가계부 통계 리포트</h1>
-                        <p className="text-muted-foreground text-sm">최근 12개월간의 수입과 지출 흐름을 분석합니다.</p>
+                        <h1 className="text-2xl font-bold tracking-tight">가계부 통계</h1>
+                        <p className="text-sm text-muted-foreground">연간 수입 및 지출 현황을 분석합니다.</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 bg-muted/40 p-1.5 rounded-xl border border-border/50">
-                    <Button variant="ghost" size="icon" onClick={handlePrev} className="h-8 w-8 hover:bg-background">
-                        <ChevronLeft className="h-4 w-4" />
+                <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg">
+                    <Button variant="ghost" size="icon" onClick={() => changeYear(-1)}>
+                        <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <div className="text-sm font-bold px-2 min-w-[120px] text-center">
-                        {endYear}년 {endMonth}월 기준
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={handleNext} className="h-8 w-8 hover:bg-background">
-                        <ChevronRight className="h-4 w-4" />
+                    <span className="px-4 font-bold text-lg">{year}년</span>
+                    <Button variant="ghost" size="icon" onClick={() => changeYear(1)}>
+                        <ChevronRight className="w-4 h-4" />
                     </Button>
                 </div>
             </div>
 
-            {/* Income Graph */}
-            <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50">
-                <CardHeader className="bg-blue-50/50 border-b border-blue-100/50 py-3">
-                    <CardTitle className="text-sm font-bold text-blue-700 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-blue-600" />
-                        월별 수입 흐름
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                    <div className="h-[250px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatCurrency} />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9' }} />
-                                <Bar dataKey="income" name="수입" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={24} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Expense Graph */}
-            <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50">
-                <CardHeader className="bg-red-50/50 border-b border-red-100/50 py-3">
-                    <CardTitle className="text-sm font-bold text-red-700 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-red-600" />
-                        월별 지출 흐름
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                    <div className="h-[250px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatCurrency} />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9' }} />
-                                <Bar dataKey="expense" name="지출" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={24} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Net Profit Graph */}
-            <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50">
-                <CardHeader className="bg-slate-50 border-b border-slate-200/50 py-3">
-                    <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-slate-600" />
-                        월별 순익 (수입 - 지출)
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                    <div className="h-[250px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatCurrency} />
-                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9' }} />
-                                <ReferenceLine y={0} stroke="#64748b" strokeWidth={1} />
-                                <Bar dataKey="netProfit" name="순익" barSize={24}>
-                                    {monthlyData.map((entry, index) => (
-                                        <Cell
-                                            key={`cell-${index}`}
-                                            fill={entry.netProfit >= 0 ? "#2563eb" : "#ef4444"}
-                                        />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Summary Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card className="bg-blue-50/30 border-blue-100">
-                    <CardContent className="p-4">
-                        <p className="text-xs font-bold text-blue-600 uppercase mb-1">최근 1년 총 수입</p>
-                        <h3 className="text-xl font-bold">{new Intl.NumberFormat('ko-KR').format(monthlyData.reduce((acc, curr) => acc + curr.income, 0))}원</h3>
+                <Card className="border-none bg-blue-50 dark:bg-blue-900/10">
+                    <CardContent className="pt-6">
+                        <p className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">연간 총 수입</p>
+                        <h3 className="text-2xl font-bold text-blue-700">
+                            {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(stats.reduce((acc, curr) => acc + curr.income, 0))}
+                        </h3>
                     </CardContent>
                 </Card>
-                <Card className="bg-red-50/30 border-red-100">
-                    <CardContent className="p-4">
-                        <p className="text-xs font-bold text-red-600 uppercase mb-1">최근 1년 총 지출</p>
-                        <h3 className="text-xl font-bold">{new Intl.NumberFormat('ko-KR').format(monthlyData.reduce((acc, curr) => acc + curr.expense, 0))}원</h3>
+                <Card className="border-none bg-red-50 dark:bg-red-900/10">
+                    <CardContent className="pt-6">
+                        <p className="text-xs font-bold uppercase tracking-wider text-red-600 mb-1">연간 총 지출</p>
+                        <h3 className="text-2xl font-bold text-red-700">
+                            {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(stats.reduce((acc, curr) => acc + curr.expense, 0))}
+                        </h3>
                     </CardContent>
                 </Card>
-                <Card className="bg-slate-50 border-slate-200">
-                    <CardContent className="p-4">
-                        <p className="text-xs font-bold text-slate-600 uppercase mb-1">최근 1년 총 순익</p>
-                        <h3 className={`text-xl font-bold ${monthlyData.reduce((acc, curr) => acc + curr.netProfit, 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                            {new Intl.NumberFormat('ko-KR').format(monthlyData.reduce((acc, curr) => acc + curr.netProfit, 0))}원
+                <Card className="border-none bg-primary/5">
+                    <CardContent className="pt-6">
+                        <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1">연간 순손익</p>
+                        <h3 className="text-2xl font-bold text-primary">
+                            {new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(stats.reduce((acc, curr) => acc + curr.netProfit, 0))}
                         </h3>
                     </CardContent>
                 </Card>
             </div>
+
+            <Card className="shadow-sm">
+                <CardHeader>
+                    <CardTitle>월별 수입/지출 추이</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                    <div className="h-[400px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={stats}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="month" />
+                                <YAxis
+                                    tickFormatter={(val: number) => new Intl.NumberFormat('ko-KR', { notation: 'compact' }).format(val)}
+                                />
+                                <Tooltip
+                                    formatter={(val: any) => new Intl.NumberFormat('ko-KR').format(Number(val)) + "원"}
+                                />
+                                <Legend />
+                                <Bar dataKey="income" name="수입" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="expense" name="지출" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+                <CardHeader>
+                    <CardTitle>월별 내역 상세</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-muted/50 border-b">
+                                    <th className="px-4 py-3 text-left">기간</th>
+                                    <th className="px-4 py-3 text-right">수입</th>
+                                    <th className="px-4 py-3 text-right">지출</th>
+                                    <th className="px-4 py-3 text-right font-bold">순손익</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {stats.map((s) => (
+                                    <tr key={s.month} className="hover:bg-muted/20 transition-colors">
+                                        <td className="px-4 py-3">{s.monthFull}</td>
+                                        <td className="px-4 py-3 text-right text-blue-600">{new Intl.NumberFormat('ko-KR').format(s.income)}</td>
+                                        <td className="px-4 py-3 text-right text-red-500">{new Intl.NumberFormat('ko-KR').format(s.expense)}</td>
+                                        <td className={`px-4 py-3 text-right font-bold ${s.netProfit >= 0 ? 'text-primary' : 'text-red-700'}`}>
+                                            {new Intl.NumberFormat('ko-KR').format(s.netProfit)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }

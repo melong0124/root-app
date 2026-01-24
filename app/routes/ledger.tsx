@@ -5,39 +5,43 @@ import { Button } from "~/components/ui/button";
 import { Wallet, Plus, Save, PlusCircle, Trash2, Loader2, CheckCircle2, History, ArrowRight } from "lucide-react";
 import { prisma } from "~/db.server";
 import { useEffect, useRef, useState } from "react";
+import { requireAuth } from "~/lib/session.server";
 
-export async function loader() {
-    const user = await prisma.user.findUnique({
-        where: { email: "test@example.com" },
+export async function loader({ request }: Route.LoaderArgs) {
+    // 인증 체크 - 로그인하지 않은 경우 /login으로 리다이렉트
+    await requireAuth(request);
+
+    // 모든 계정 조회 (사용자 구분 없이)
+    const accounts = await prisma.account.findMany();
+
+    // 모든 거래 내역 조회 (사용자 구분 없이)
+    const transactions = await prisma.transaction.findMany({
+        orderBy: { date: 'desc' },
+        take: 100,
         include: {
-            accounts: true,
-            transactions: {
-                orderBy: { date: 'desc' },
-                take: 100,
+            entries: {
                 include: {
-                    entries: {
-                        include: {
-                            account: true
-                        }
-                    }
+                    account: true
                 }
             }
-        },
+        }
     });
 
-    if (!user) {
-        throw new Error("User not found");
+    // 첫 번째 사용자 ID 가져오기 (거래 저장용)
+    const firstUser = await prisma.user.findFirst();
+    if (!firstUser) {
+        throw new Error("No user found in database");
     }
 
-    const assetAccounts = user.accounts.filter((a: any) => a.type === "ASSET" || a.type === "LIABILITY");
-    const expenseAccounts = user.accounts.filter((a: any) => a.type === "EXPENSE");
-    const revenueAccounts = user.accounts.filter((a: any) => a.type === "REVENUE");
+    const assetAccounts = accounts.filter((a: any) => a.type === "ASSET" || a.type === "LIABILITY");
+    const expenseAccounts = accounts.filter((a: any) => a.type === "EXPENSE");
+    const revenueAccounts = accounts.filter((a: any) => a.type === "REVENUE");
 
     const monthlyGroups: { [key: string]: { transactions: any[], totalIncome: number, totalExpense: number, net: number } } = {};
 
-    user.transactions.forEach((tx: any) => {
+    transactions.forEach((tx: any) => {
         const date = new Date(tx.date);
-        const monthKey = `${date.getFullYear()} -${String(date.getMonth() + 1).padStart(2, '0')} `;
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
         if (!monthlyGroups[monthKey]) {
             monthlyGroups[monthKey] = { transactions: [], totalIncome: 0, totalExpense: 0, net: 0 };
@@ -75,7 +79,7 @@ export async function loader() {
         assetAccounts,
         expenseAccounts,
         revenueAccounts,
-        userId: user.id,
+        userId: firstUser.id,
         recentTransactions: sortedMonths
     };
 }

@@ -6,6 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { TrendingUp, TrendingDown, GripHorizontal, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
+import { requireAuth } from "~/lib/session.server";
 
 // --- Types & Enums ---
 
@@ -40,6 +41,9 @@ function isLiability(category: AssetCategory): boolean {
 // --- Loader ---
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    // 인증 체크
+    await requireAuth(request);
+
     const url = new URL(request.url);
     const yearParam = url.searchParams.get("year");
     const monthParam = url.searchParams.get("month");
@@ -56,27 +60,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const prevYear = month === 1 ? year - 1 : year;
     const prevDate = new Date(prevYear, prevMonth - 1, 1);
 
-    // Fetch User with combined data
-    const user = await prisma.user.findUnique({
-        where: { email: "test@example.com" },
+    // 모든 자산 조회 (사용자 구분 없이)
+    const assets = await prisma.asset.findMany({
         include: {
-            assets: {
-                include: {
-                    // @ts-ignore
-                    values: {
-                        where: {
-                            OR: [
-                                { date: selectedDate },
-                                { date: prevDate }
-                            ]
-                        },
-                    },
+            // @ts-ignore
+            values: {
+                where: {
+                    OR: [
+                        { date: selectedDate },
+                        { date: prevDate }
+                    ]
                 },
             },
         },
     });
 
-    if (!user) throw new Error("User not found");
+    // 첫 번째 사용자 ID 가져오기
+    const firstUser = await prisma.user.findFirst();
+    if (!firstUser) throw new Error("No user found in database");
 
     // Group assets by category
     const assetsByCategory: Record<AssetCategory, Array<any>> = {
@@ -94,9 +95,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     let prevTotalAssets = 0;
     let prevTotalLiabilities = 0;
 
-    // 1. Process Manual Assets (Existing Logic)
+    // Process all assets
     // @ts-ignore
-    user.assets.forEach((asset) => {
+    assets.forEach((asset) => {
         // Current month value
         const currentValueRecord = asset.values.find((v: any) =>
             v.date.getTime() === selectedDate.getTime()
@@ -149,7 +150,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         prevTotalLiabilities,
         prevNetWorth,
         netWorthChange,
-        userId: user.id
+        userId: firstUser.id
     };
 }
 

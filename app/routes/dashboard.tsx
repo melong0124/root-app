@@ -5,6 +5,7 @@ import { YearSelector } from "~/components/year-selector";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, LabelList } from "recharts";
+import { requireAuth } from "~/lib/session.server";
 
 // --- Types & Enums ---
 
@@ -27,27 +28,27 @@ function isLiability(category: AssetCategory): boolean {
 // --- Loader ---
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    // 인증 체크
+    await requireAuth(request);
+
     const url = new URL(request.url);
     const yearParam = url.searchParams.get("year");
 
     const now = new Date();
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
-    // Fetch User with assets and ALL values to calculate YoY and History
-    const user = await prisma.user.findUnique({
-        where: { email: "test@example.com" },
+    // 모든 자산 조회 (사용자 구분 없이)
+    const assets = await prisma.asset.findMany({
         include: {
-            assets: {
-                include: {
-                    values: {
-                        orderBy: { date: 'asc' }
-                    },
-                },
+            values: {
+                orderBy: { date: 'asc' }
             },
         },
     });
 
-    if (!user) throw new Error("User not found");
+    // 첫 번째 사용자 ID 가져오기
+    const firstUser = await prisma.user.findFirst();
+    if (!firstUser) throw new Error("No user found in database");
 
     // Initialize monthly data for the selected year
     const monthlyData: Array<{
@@ -73,7 +74,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         let totalAssets = 0;
         let totalLiabilities = 0;
 
-        user.assets.forEach((asset) => {
+        assets.forEach((asset) => {
             const valueRecord = asset.values.find((v: any) =>
                 v.date.getTime() === targetDate.getTime()
             );
@@ -106,7 +107,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             prevYearEnd: { totalAssets: 0, totalLiabilities: 0, netWorth: 0 },
             yoy: { assets: 0, liabilities: 0, netWorth: 0 },
             yearlyHistory: [],
-            userId: user.id,
+            userId: firstUser.id,
         };
     }
 
@@ -118,7 +119,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             // Compare Jan with previous year's Dec
             const prevDecDate = new Date(year - 1, 11, 1);
             let prevDecNetWorth = 0;
-            user.assets.forEach(asset => {
+            assets.forEach(asset => {
                 const val = asset.values.find(v => v.date.getTime() === prevDecDate.getTime());
                 const amt = val?.amount?.toNumber() ?? 0;
                 if (isLiability(asset.category as AssetCategory)) prevDecNetWorth -= amt;
@@ -136,7 +137,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     let prevYearEndLiabilities = 0;
     const prevDecDate = new Date(year - 1, 11, 1);
 
-    user.assets.forEach((asset) => {
+    assets.forEach((asset) => {
         const valueRecord = asset.values.find((v: any) =>
             v.date.getTime() === prevDecDate.getTime()
         );
@@ -158,27 +159,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Gather Yearly History (Latest available of each year)
     const yearsWithData = Array.from(new Set(
-        user.assets.flatMap(a => a.values.map(v => v.date.getFullYear()))
+        assets.flatMap(a => a.values.map(v => v.date.getFullYear()))
     )).sort((a, b) => b - a); // Newest first
 
-    const yearlyHistory = yearsWithData.map(y => {
+    const yearlyHistory = (yearsWithData as number[]).map(y => {
         // If it's current year, use current month, else use Dec
         const targetMonth = (y === currentYear) ? currentMonth - 1 : 11;
         const targetDate = new Date(y, targetMonth, 1);
 
-        let assets = 0;
-        let liabilities = 0;
-        user.assets.forEach(asset => {
-            const val = asset.values.find(v => v.date.getTime() === targetDate.getTime());
+        let assetsSum = 0;
+        let liabilitiesSum = 0;
+        assets.forEach((asset: any) => {
+            const val = asset.values.find((v: any) => v.date.getTime() === targetDate.getTime());
             const amt = val?.amount?.toNumber() ?? 0;
-            if (isLiability(asset.category as AssetCategory)) liabilities += amt;
-            else assets += amt;
+            if (isLiability(asset.category as AssetCategory)) liabilitiesSum += amt;
+            else assetsSum += amt;
         });
         return {
             year: y,
-            assets,
-            liabilities,
-            netWorth: assets - liabilities,
+            assets: assetsSum,
+            liabilities: liabilitiesSum,
+            netWorth: assetsSum - liabilitiesSum,
             label: y === currentYear ? `${y} (현재)` : `${y} (기말)`
         };
     });
@@ -198,7 +199,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             netWorth: yoyNetWorthChange
         },
         yearlyHistory,
-        userId: user.id,
+        userId: firstUser.id,
     };
 }
 
