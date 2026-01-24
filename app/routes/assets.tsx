@@ -128,26 +128,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
             });
         }
 
-        // Helper to check if two dates are same year/month/day
-        const isSameDay = (d1: Date, d2: Date) =>
-            d1.getUTCFullYear() === d2.getUTCFullYear() &&
-            d1.getUTCMonth() === d2.getUTCMonth() &&
-            d1.getUTCDate() === d2.getUTCDate();
+        // Helper to convert date to KST Year-Month string for robust comparison
+        const getYM = (d: Date) => {
+            return new Intl.DateTimeFormat('ko-KR', {
+                year: 'numeric',
+                month: 'numeric',
+                timeZone: 'Asia/Seoul'
+            }).format(new Date(d));
+        };
+
+        const targetYM = getYM(selectedDate);
+        const targetPrevYM = getYM(prevDate);
 
         // Current month value
-        const currentValueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), selectedDate));
+        const currentValueRecord = asset.values.find((v: any) => getYM(v.date) === targetYM);
         const assetValue = currentValueRecord?.amount?.toNumber() ?? 0;
 
         // Previous month value
-        const prevValueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), prevDate));
+        const prevValueRecord = asset.values.find((v: any) => getYM(v.date) === targetPrevYM);
         const prevValue = prevValueRecord?.amount?.toNumber() ?? 0;
 
         if (index === 0) {
-            console.log('🔍 [Assets Loader] First asset values processed:', {
-                currentValue: assetValue,
-                prevValue: prevValue,
-                currentFound: !!currentValueRecord,
-                prevFound: !!prevValueRecord
+            console.log('🔍 [Assets Loader] Matching debug:', {
+                targetYM,
+                dbValueDates: asset.values.map((v: any) => getYM(v.date)),
+                currentFound: !!currentValueRecord
             });
         }
 

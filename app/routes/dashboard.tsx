@@ -57,11 +57,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     console.log('🔍 [Dashboard Loader] First user:', firstUser ? firstUser.id : 'NOT FOUND');
     if (!firstUser) throw new Error("No user found in database");
 
-    // Helper to check if two dates are same year/month/day
-    const isSameDay = (d1: Date, d2: Date) =>
-        d1.getUTCFullYear() === d2.getUTCFullYear() &&
-        d1.getUTCMonth() === d2.getUTCMonth() &&
-        d1.getUTCDate() === d2.getUTCDate();
+    // Helper to convert date to KST Year-Month string for robust comparison
+    const getYM = (d: Date) => {
+        return new Intl.DateTimeFormat('ko-KR', {
+            year: 'numeric',
+            month: 'numeric',
+            timeZone: 'Asia/Seoul'
+        }).format(new Date(d));
+    };
 
     // Initialize monthly data for the selected year
     const monthlyData: Array<{
@@ -83,12 +86,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Process each month up to the last available month
     for (let month = 1; month <= lastMonthToProcess; month++) {
         const targetDate = new Date(year, month - 1, 1);
+        const targetYM = getYM(targetDate);
 
         let totalAssets = 0;
         let totalLiabilities = 0;
 
         assets.forEach((asset) => {
-            const valueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), targetDate));
+            const valueRecord = asset.values.find((v: any) => getYM(v.date) === targetYM);
             const assetValue = valueRecord?.amount?.toNumber() ?? 0;
 
             const category = asset.category as AssetCategory;
@@ -129,9 +133,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         } else {
             // Compare Jan with previous year's Dec
             const prevDecDate = new Date(year - 1, 11, 1);
+            const prevDecYM = getYM(prevDecDate);
             let prevDecNetWorth = 0;
             assets.forEach(asset => {
-                const val = asset.values.find((v: any) => isSameDay(new Date(v.date), prevDecDate));
+                const val = asset.values.find((v: any) => getYM(v.date) === prevDecYM);
                 const amt = val?.amount?.toNumber() ?? 0;
                 if (isLiability(asset.category as AssetCategory)) prevDecNetWorth -= amt;
                 else prevDecNetWorth += amt;
@@ -147,9 +152,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     let prevYearEndAssets = 0;
     let prevYearEndLiabilities = 0;
     const prevDecDate = new Date(year - 1, 11, 1);
+    const prevDecYM = getYM(prevDecDate);
 
     assets.forEach((asset) => {
-        const valueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), prevDecDate));
+        const valueRecord = asset.values.find((v: any) => getYM(v.date) === prevDecYM);
         const assetValue = valueRecord?.amount?.toNumber() ?? 0;
 
         if (isLiability(asset.category as AssetCategory)) {
@@ -168,18 +174,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Gather Yearly History (Latest available of each year)
     const yearsWithData = Array.from(new Set(
-        assets.flatMap(a => a.values.map(v => v.date.getFullYear()))
+        assets.flatMap(a => a.values.map(v => new Date(v.date).getFullYear()))
     )).sort((a, b) => b - a); // Newest first
 
     const yearlyHistory = (yearsWithData as number[]).map(y => {
         // If it's current year, use current month, else use Dec
         const targetMonth = (y === currentYear) ? currentMonth - 1 : 11;
         const targetDate = new Date(y, targetMonth, 1);
+        const targetYM = getYM(targetDate);
 
         let assetsSum = 0;
         let liabilitiesSum = 0;
         assets.forEach((asset: any) => {
-            const val = asset.values.find((v: any) => isSameDay(new Date(v.date), targetDate));
+            const val = asset.values.find((v: any) => getYM(v.date) === targetYM);
             const amt = val?.amount?.toNumber() ?? 0;
             if (isLiability(asset.category as AssetCategory)) liabilitiesSum += amt;
             else assetsSum += amt;
