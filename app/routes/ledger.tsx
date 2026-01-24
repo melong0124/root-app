@@ -210,9 +210,17 @@ export default function Ledger() {
     const isSubmitting = navigation.state === "submitting" || navigation.state === "loading";
     const formRef = useRef<HTMLFormElement>(null);
     const [editingTxId, setEditingTxId] = useState<string | null>(null);
+    const [isDesktop, setIsDesktop] = useState(true);
+
+    useEffect(() => {
+        const checkMobile = () => setIsDesktop(window.innerWidth >= 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const [rows, setRows] = useState<Row[]>([
-        { id: Math.random().toString(), date: new Date().toISOString().split('T')[0], description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }
+        { id: Math.random().toString(), date: new Date().toISOString().split('T', 1)[0], description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }
     ]);
 
     useEffect(() => {
@@ -271,163 +279,167 @@ export default function Ledger() {
                     <input type="hidden" name="userId" value={userId} />
 
                     {/* Desktop Table View */}
-                    <Card className="shadow-lg border-border/40 hidden md:block">
-                        <CardContent className="p-0 pb-0">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-muted/50 border-b">
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground w-24">구분</th>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground w-36">날짜</th>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground min-w-[180px]">적요 (내용)</th>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground w-32 text-right">금액 (KRW)</th>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground w-40">출처 (자금원)</th>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground w-40">용도 (도착지)</th>
-                                            <th className="px-4 py-1.5 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y text-sm">
-                                        {rows.map((row) => (
-                                            <tr key={row.id} className="hover:bg-muted/20 transition-colors group">
-                                                <td className="px-4 py-2">
+                    {isDesktop && (
+                        <Card className="shadow-lg border-border/40 hidden md:block">
+                            <CardContent className="p-0 pb-0">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-muted/50 border-b">
+                                                <th className="px-4 py-3 font-semibold text-muted-foreground w-24">구분</th>
+                                                <th className="px-4 py-3 font-semibold text-muted-foreground w-36">날짜</th>
+                                                <th className="px-4 py-3 font-semibold text-muted-foreground min-w-[180px]">적요 (내용)</th>
+                                                <th className="px-4 py-3 font-semibold text-muted-foreground w-32 text-right">금액 (KRW)</th>
+                                                <th className="px-4 py-3 font-semibold text-muted-foreground w-40">출처 (자금원)</th>
+                                                <th className="px-4 py-3 font-semibold text-muted-foreground w-40">용도 (도착지)</th>
+                                                <th className="px-4 py-1.5 w-10"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y text-sm">
+                                            {rows.map((row) => (
+                                                <tr key={row.id} className="hover:bg-muted/20 transition-colors group">
+                                                    <td className="px-4 py-2">
+                                                        <select
+                                                            name="type"
+                                                            className={`w - full bg - transparent border - none focus: ring - 1 focus: ring - primary rounded p - 1.5 outline - none transition - all font - bold ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
+                                                            value={row.type}
+                                                            onChange={(e) => updateRow(row.id, "type", e.target.value)}
+                                                        >
+                                                            <option value="EXPENSE">지출</option>
+                                                            <option value="INCOME">수입</option>
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-2">
+                                                        <input type="date" name="date" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all text-muted-foreground" value={row.date} onChange={(e) => updateRow(row.id, "date", e.target.value)} required />
+                                                    </td>
+                                                    <td className="px-4 py-2">
+                                                        <input type="text" name="description" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all" placeholder="거래 내용을 입력하세요" value={row.description} onChange={(e) => updateRow(row.id, "description", e.target.value)} required />
+                                                    </td>
+                                                    <td className="px-4 py-2 text-right">
+                                                        <div className="relative inline-block w-full">
+                                                            <span className={`absolute left - 2 top - 1 / 2 - translate - y - 1 / 2 font - mono ${row.type === 'INCOME' ? 'text-blue-600/50' : 'text-red-500/50'} `}>₩</span>
+                                                            <input
+                                                                type="number"
+                                                                name="amount"
+                                                                className={`w - full bg - transparent border - none focus: ring - 1 focus: ring - primary rounded p - 1.5 pl - 6 outline - none transition - all text - right font - mono font - bold ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
+                                                                placeholder="0"
+                                                                value={row.amount}
+                                                                onChange={(e) => updateRow(row.id, "amount", e.target.value)}
+                                                                required
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-2">
+                                                        <select name="creditAccountId" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all appearance-none cursor-pointer" value={row.creditAccountId} onChange={(e) => updateRow(row.id, "creditAccountId", e.target.value)}>
+                                                            {row.type === "EXPENSE" ?
+                                                                assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                                revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                            }
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-2">
+                                                        <select name="debitAccountId" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-2 outline-none transition-all appearance-none cursor-pointer" value={row.debitAccountId} onChange={(e) => updateRow(row.id, "debitAccountId", e.target.value)}>
+                                                            {row.type === "EXPENSE" ?
+                                                                expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                                assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                            }
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-2 text-center">
+                                                        <button type="button" onClick={() => removeRow(row.id)} className="text-muted-foreground/50 hover:text-destructive transition-colors p-1 opacity-0 group-hover:opacity-100">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {/* Desktop Add Row Button is outside in header, or we can keep it here contextually if needed, but the header button is better for visibility */}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Mobile Card List Input View */}
+                    {!isDesktop && (
+                        <div className="md:hidden space-y-4">
+                            {rows.map((row, index) => (
+                                <Card key={row.id} className="shadow-sm border-l-4 border-l-primary relative">
+                                    <CardContent className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1 space-y-3">
+                                                <div className="flex gap-2">
                                                     <select
                                                         name="type"
-                                                        className={`w - full bg - transparent border - none focus: ring - 1 focus: ring - primary rounded p - 1.5 outline - none transition - all font - bold ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
+                                                        className={`bg - transparent font - bold text - sm outline - none ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
                                                         value={row.type}
                                                         onChange={(e) => updateRow(row.id, "type", e.target.value)}
                                                     >
                                                         <option value="EXPENSE">지출</option>
                                                         <option value="INCOME">수입</option>
                                                     </select>
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input type="date" name="date" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all text-muted-foreground" value={row.date} onChange={(e) => updateRow(row.id, "date", e.target.value)} required />
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <input type="text" name="description" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all" placeholder="거래 내용을 입력하세요" value={row.description} onChange={(e) => updateRow(row.id, "description", e.target.value)} required />
-                                                </td>
-                                                <td className="px-4 py-2 text-right">
-                                                    <div className="relative inline-block w-full">
-                                                        <span className={`absolute left - 2 top - 1 / 2 - translate - y - 1 / 2 font - mono ${row.type === 'INCOME' ? 'text-blue-600/50' : 'text-red-500/50'} `}>₩</span>
-                                                        <input
-                                                            type="number"
-                                                            name="amount"
-                                                            className={`w - full bg - transparent border - none focus: ring - 1 focus: ring - primary rounded p - 1.5 pl - 6 outline - none transition - all text - right font - mono font - bold ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
-                                                            placeholder="0"
-                                                            value={row.amount}
-                                                            onChange={(e) => updateRow(row.id, "amount", e.target.value)}
-                                                            required
-                                                        />
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <select name="creditAccountId" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all appearance-none cursor-pointer" value={row.creditAccountId} onChange={(e) => updateRow(row.id, "creditAccountId", e.target.value)}>
-                                                        {row.type === "EXPENSE" ?
-                                                            assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                            revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                        }
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <select name="debitAccountId" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-2 outline-none transition-all appearance-none cursor-pointer" value={row.debitAccountId} onChange={(e) => updateRow(row.id, "debitAccountId", e.target.value)}>
-                                                        {row.type === "EXPENSE" ?
-                                                            expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                            assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                        }
-                                                    </select>
-                                                </td>
-                                                <td className="px-4 py-2 text-center">
-                                                    <button type="button" onClick={() => removeRow(row.id)} className="text-muted-foreground/50 hover:text-destructive transition-colors p-1 opacity-0 group-hover:opacity-100">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {/* Desktop Add Row Button is outside in header, or we can keep it here contextually if needed, but the header button is better for visibility */}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Mobile Card List Input View */}
-                    <div className="md:hidden space-y-4">
-                        {rows.map((row, index) => (
-                            <Card key={row.id} className="shadow-sm border-l-4 border-l-primary relative">
-                                <CardContent className="p-4 space-y-3">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex-1 space-y-3">
-                                            <div className="flex gap-2">
-                                                <select
-                                                    name="type"
-                                                    className={`bg - transparent font - bold text - sm outline - none ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
-                                                    value={row.type}
-                                                    onChange={(e) => updateRow(row.id, "type", e.target.value)}
-                                                >
-                                                    <option value="EXPENSE">지출</option>
-                                                    <option value="INCOME">수입</option>
-                                                </select>
+                                                    <input
+                                                        type="date"
+                                                        name="date"
+                                                        className="bg-transparent text-sm outline-none text-muted-foreground"
+                                                        value={row.date}
+                                                        onChange={(e) => updateRow(row.id, "date", e.target.value)}
+                                                        required
+                                                    />
+                                                </div>
                                                 <input
-                                                    type="date"
-                                                    name="date"
-                                                    className="bg-transparent text-sm outline-none text-muted-foreground"
-                                                    value={row.date}
-                                                    onChange={(e) => updateRow(row.id, "date", e.target.value)}
+                                                    type="text"
+                                                    name="description"
+                                                    className="w-full bg-muted/20 rounded px-2 py-1 outline-none font-medium placeholder:text-muted-foreground/50"
+                                                    placeholder="거래 내용 (예: 점심 식사)"
+                                                    value={row.description}
+                                                    onChange={(e) => updateRow(row.id, "description", e.target.value)}
                                                     required
                                                 />
                                             </div>
+                                            <button type="button" onClick={() => removeRow(row.id)} className="text-muted-foreground hover:text-destructive p-1">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <span className={`font - mono ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}>₩</span>
                                             <input
-                                                type="text"
-                                                name="description"
-                                                className="w-full bg-muted/20 rounded px-2 py-1 outline-none font-medium placeholder:text-muted-foreground/50"
-                                                placeholder="거래 내용 (예: 점심 식사)"
-                                                value={row.description}
-                                                onChange={(e) => updateRow(row.id, "description", e.target.value)}
+                                                type="number"
+                                                name="amount"
+                                                className={`flex - 1 bg - muted / 20 rounded px - 2 py - 1 outline - none text - right font - mono font - bold ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
+                                                placeholder="0"
+                                                value={row.amount}
+                                                onChange={(e) => updateRow(row.id, "amount", e.target.value)}
                                                 required
                                             />
                                         </div>
-                                        <button type="button" onClick={() => removeRow(row.id)} className="text-muted-foreground hover:text-destructive p-1">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <span className={`font - mono ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}>₩</span>
-                                        <input
-                                            type="number"
-                                            name="amount"
-                                            className={`flex - 1 bg - muted / 20 rounded px - 2 py - 1 outline - none text - right font - mono font - bold ${row.type === 'INCOME' ? 'text-blue-600' : 'text-red-500'} `}
-                                            placeholder="0"
-                                            value={row.amount}
-                                            onChange={(e) => updateRow(row.id, "amount", e.target.value)}
-                                            required
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                        <div className="flex flex-col gap-1">
-                                            <span className="text-[10px] text-muted-foreground">출처 (From)</span>
-                                            <select name="creditAccountId" className="bg-muted/20 rounded p-1.5 outline-none text-xs" value={row.creditAccountId} onChange={(e) => updateRow(row.id, "creditAccountId", e.target.value)}>
-                                                {row.type === "EXPENSE" ?
-                                                    assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                    revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                }
-                                            </select>
+                                        <div className="grid grid-cols-2 gap-2 text-sm">
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-[10px] text-muted-foreground">출처 (From)</span>
+                                                <select name="creditAccountId" className="bg-muted/20 rounded p-1.5 outline-none text-xs" value={row.creditAccountId} onChange={(e) => updateRow(row.id, "creditAccountId", e.target.value)}>
+                                                    {row.type === "EXPENSE" ?
+                                                        assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                        revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <span className="text-[10px] text-muted-foreground">용도 (To)</span>
+                                                <select name="debitAccountId" className="bg-muted/20 rounded p-1.5 outline-none text-xs" value={row.debitAccountId} onChange={(e) => updateRow(row.id, "debitAccountId", e.target.value)}>
+                                                    {row.type === "EXPENSE" ?
+                                                        expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                        assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                    }
+                                                </select>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col gap-1">
-                                            <span className="text-[10px] text-muted-foreground">용도 (To)</span>
-                                            <select name="debitAccountId" className="bg-muted/20 rounded p-1.5 outline-none text-xs" value={row.debitAccountId} onChange={(e) => updateRow(row.id, "debitAccountId", e.target.value)}>
-                                                {row.type === "EXPENSE" ?
-                                                    expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                    assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                }
-                                            </select>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
 
                     <div className="px-4 py-4 md:border-t md:bg-muted/20 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mt-4 md:mt-0 bg-card rounded-lg md:rounded-none border md:border-none shadow-sm md:shadow-none">
                         <div>
@@ -481,215 +493,219 @@ export default function Ledger() {
                             </div>
 
                             {/* Desktop Table Transaction View */}
-                            <Card className="border-border/40 shadow-sm overflow-hidden hidden md:block">
-                                <CardContent className="p-0">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-muted/30 border-b">
-                                                    <th className="px-4 py-2 font-semibold text-muted-foreground w-20">구분</th>
-                                                    <th className="px-4 py-2 font-semibold text-muted-foreground w-32">날짜</th>
-                                                    <th className="px-4 py-2 font-semibold text-muted-foreground">적요 (내역)</th>
-                                                    <th className="px-4 py-2 font-semibold text-muted-foreground text-right w-36">금액</th>
-                                                    <th className="px-4 py-2 font-semibold text-muted-foreground w-64">거래 흐름</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y">
-                                                {group.transactions.map((tx: any) => {
-                                                    const debitEntry = tx.entries.find((e: any) => e.amount > 0);
-                                                    const creditEntry = tx.entries.find((e: any) => e.amount < 0);
-                                                    const amount = debitEntry ? Math.abs(debitEntry.amount) : 0;
-                                                    const isIncome = tx.type === "INCOME";
-                                                    const isEditing = editingTxId === tx.id;
+                            {isDesktop && (
+                                <Card className="border-border/40 shadow-sm overflow-hidden hidden md:block">
+                                    <CardContent className="p-0">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm text-left border-collapse">
+                                                <thead>
+                                                    <tr className="bg-muted/30 border-b">
+                                                        <th className="px-4 py-2 font-semibold text-muted-foreground w-20">구분</th>
+                                                        <th className="px-4 py-2 font-semibold text-muted-foreground w-32">날짜</th>
+                                                        <th className="px-4 py-2 font-semibold text-muted-foreground">적요 (내역)</th>
+                                                        <th className="px-4 py-2 font-semibold text-muted-foreground text-right w-36">금액</th>
+                                                        <th className="px-4 py-2 font-semibold text-muted-foreground w-64">거래 흐름</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {group.transactions.map((tx: any) => {
+                                                        const debitEntry = tx.entries.find((e: any) => e.amount > 0);
+                                                        const creditEntry = tx.entries.find((e: any) => e.amount < 0);
+                                                        const amount = debitEntry ? Math.abs(debitEntry.amount) : 0;
+                                                        const isIncome = tx.type === "INCOME";
+                                                        const isEditing = editingTxId === tx.id;
 
-                                                    if (isEditing) {
+                                                        if (isEditing) {
+                                                            return (
+                                                                <tr key={tx.id} className="bg-primary/5">
+                                                                    <td colSpan={5} className="p-0">
+                                                                        <Form method="post" className="w-full">
+                                                                            <input type="hidden" name="id" value={tx.id} />
+                                                                            <input type="hidden" name="intent" value="edit_transaction" />
+                                                                            <div className="flex items-center gap-2 p-2 w-full overflow-x-auto">
+                                                                                <div className="w-24 shrink-0">
+                                                                                    <select name="type" defaultValue={tx.type} className="w-full bg-background border rounded p-1 text-xs">
+                                                                                        <option value="EXPENSE">지출</option>
+                                                                                        <option value="INCOME">수입</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div className="w-32 shrink-0">
+                                                                                    <input type="date" name="date" defaultValue={new Date(tx.date).toISOString().split('T')[0]} className="w-full bg-background border rounded p-1 text-xs" />
+                                                                                </div>
+                                                                                <div className="flex-1 min-w-[150px]">
+                                                                                    <input type="text" name="description" defaultValue={tx.description} className="w-full bg-background border rounded p-1 text-xs" />
+                                                                                </div>
+                                                                                <div className="w-32 shrink-0">
+                                                                                    <input type="number" name="amount" defaultValue={amount} className="w-full bg-background border rounded p-1 text-xs text-right" />
+                                                                                </div>
+                                                                                <div className="flex flex-col gap-1 w-40 shrink-0">
+                                                                                    <select name="creditAccountId" defaultValue={creditEntry?.accountId} className="w-full bg-background border rounded p-1 text-[10px]">
+                                                                                        <option value="">출처(From)</option>
+                                                                                        {tx.type === "EXPENSE" ?
+                                                                                            assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                                                            revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                                                        }
+                                                                                    </select>
+                                                                                    <select name="debitAccountId" defaultValue={debitEntry?.accountId} className="w-full bg-background border rounded p-1 text-[10px]">
+                                                                                        <option value="">용도(To)</option>
+                                                                                        {tx.type === "EXPENSE" ?
+                                                                                            expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                                                            assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                                                        }
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1 shrink-0 px-2">
+                                                                                    <Button size="sm" type="submit" className="h-7 px-2 text-[10px]"><Save className="w-3 h-3 mr-1" /> 저장</Button>
+                                                                                    <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTxId(null)} className="h-7 px-2 text-[10px]"><X className="w-3 h-3 mr-1" /> 취소</Button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </Form>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        }
+
                                                         return (
-                                                            <tr key={tx.id} className="bg-primary/5">
-                                                                <td colSpan={5} className="p-0">
-                                                                    <Form method="post" className="w-full">
-                                                                        <input type="hidden" name="id" value={tx.id} />
-                                                                        <input type="hidden" name="intent" value="edit_transaction" />
-                                                                        <div className="flex items-center gap-2 p-2 w-full overflow-x-auto">
-                                                                            <div className="w-24 shrink-0">
-                                                                                <select name="type" defaultValue={tx.type} className="w-full bg-background border rounded p-1 text-xs">
-                                                                                    <option value="EXPENSE">지출</option>
-                                                                                    <option value="INCOME">수입</option>
-                                                                                </select>
-                                                                            </div>
-                                                                            <div className="w-32 shrink-0">
-                                                                                <input type="date" name="date" defaultValue={new Date(tx.date).toISOString().split('T')[0]} className="w-full bg-background border rounded p-1 text-xs" />
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-[150px]">
-                                                                                <input type="text" name="description" defaultValue={tx.description} className="w-full bg-background border rounded p-1 text-xs" />
-                                                                            </div>
-                                                                            <div className="w-32 shrink-0">
-                                                                                <input type="number" name="amount" defaultValue={amount} className="w-full bg-background border rounded p-1 text-xs text-right" />
-                                                                            </div>
-                                                                            <div className="flex flex-col gap-1 w-40 shrink-0">
-                                                                                <select name="creditAccountId" defaultValue={creditEntry?.accountId} className="w-full bg-background border rounded p-1 text-[10px]">
-                                                                                    <option value="">출처(From)</option>
-                                                                                    {tx.type === "EXPENSE" ?
-                                                                                        assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                                                        revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                                                    }
-                                                                                </select>
-                                                                                <select name="debitAccountId" defaultValue={debitEntry?.accountId} className="w-full bg-background border rounded p-1 text-[10px]">
-                                                                                    <option value="">용도(To)</option>
-                                                                                    {tx.type === "EXPENSE" ?
-                                                                                        expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                                                        assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                                                    }
-                                                                                </select>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-1 shrink-0 px-2">
-                                                                                <Button size="sm" type="submit" className="h-7 px-2 text-[10px]"><Save className="w-3 h-3 mr-1" /> 저장</Button>
-                                                                                <Button size="sm" variant="ghost" type="button" onClick={() => setEditingTxId(null)} className="h-7 px-2 text-[10px]"><X className="w-3 h-3 mr-1" /> 취소</Button>
-                                                                            </div>
+                                                            <tr key={tx.id} className="hover:bg-muted/10 transition-colors group">
+                                                                <td className="px-4 py-3">
+                                                                    <span className={`text - [11px] font - bold px - 2 py - 1 rounded - md shadow - sm ${isIncome ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-red-50 text-red-500 border border-red-100'} `}>
+                                                                        {isIncome ? '수입' : '지출'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
+                                                                    {new Date(tx.date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                                                                </td>
+                                                                <td className="px-4 py-3 font-medium max-w-[300px] truncate">
+                                                                    {tx.description}
+                                                                </td>
+                                                                <td className={`px - 4 py - 3 text - right font - mono font - bold ${isIncome ? 'text-blue-600' : 'text-red-500'} `}>
+                                                                    {isIncome ? '+' : '-'}{KRW.format(amount)}
+                                                                </td>
+                                                                <td className="px-4 py-3">
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <div className="flex items-center gap-2 text-xs">
+                                                                            <span className="bg-muted px-2 py-1 rounded text-muted-foreground whitespace-nowrap">{creditEntry?.account.name || '알 수 없음'}</span>
+                                                                            <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                                                                            <span className={`px - 2 py - 1 rounded font - medium whitespace - nowrap ${isIncome ? 'bg-blue-50 text-blue-600' : 'bg-primary/10 text-primary'} `}>{debitEntry?.account.name || '알 수 없음'}</span>
                                                                         </div>
-                                                                    </Form>
+                                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                            <button onClick={() => setEditingTxId(tx.id)} className="p-1 hover:text-primary transition-colors">
+                                                                                <Pencil className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                            <Form method="post" className="inline" onSubmit={(e) => { if (!confirm("정말 삭제하시겠습니까?")) e.preventDefault(); }}>
+                                                                                <input type="hidden" name="id" value={tx.id} />
+                                                                                <input type="hidden" name="intent" value="delete_transaction" />
+                                                                                <button type="submit" className="p-1 hover:text-destructive transition-colors">
+                                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                                </button>
+                                                                            </Form>
+                                                                        </div>
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         );
-                                                    }
-
-                                                    return (
-                                                        <tr key={tx.id} className="hover:bg-muted/10 transition-colors group">
-                                                            <td className="px-4 py-3">
-                                                                <span className={`text - [11px] font - bold px - 2 py - 1 rounded - md shadow - sm ${isIncome ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-red-50 text-red-500 border border-red-100'} `}>
-                                                                    {isIncome ? '수입' : '지출'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
-                                                                {new Date(tx.date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })}
-                                                            </td>
-                                                            <td className="px-4 py-3 font-medium max-w-[300px] truncate">
-                                                                {tx.description}
-                                                            </td>
-                                                            <td className={`px - 4 py - 3 text - right font - mono font - bold ${isIncome ? 'text-blue-600' : 'text-red-500'} `}>
-                                                                {isIncome ? '+' : '-'}{KRW.format(amount)}
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <div className="flex items-center gap-2 text-xs">
-                                                                        <span className="bg-muted px-2 py-1 rounded text-muted-foreground whitespace-nowrap">{creditEntry?.account.name || '알 수 없음'}</span>
-                                                                        <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-                                                                        <span className={`px - 2 py - 1 rounded font - medium whitespace - nowrap ${isIncome ? 'bg-blue-50 text-blue-600' : 'bg-primary/10 text-primary'} `}>{debitEntry?.account.name || '알 수 없음'}</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        <button onClick={() => setEditingTxId(tx.id)} className="p-1 hover:text-primary transition-colors">
-                                                                            <Pencil className="w-3.5 h-3.5" />
-                                                                        </button>
-                                                                        <Form method="post" className="inline" onSubmit={(e) => { if (!confirm("정말 삭제하시겠습니까?")) e.preventDefault(); }}>
-                                                                            <input type="hidden" name="id" value={tx.id} />
-                                                                            <input type="hidden" name="intent" value="delete_transaction" />
-                                                                            <button type="submit" className="p-1 hover:text-destructive transition-colors">
-                                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        </Form>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
 
                             {/* Mobile Card Transaction View */}
-                            <div className="md:hidden space-y-3">
-                                {group.transactions.map((tx: any) => {
-                                    const debitEntry = tx.entries.find((e: any) => e.amount > 0);
-                                    const creditEntry = tx.entries.find((e: any) => e.amount < 0);
-                                    const amount = debitEntry ? Math.abs(debitEntry.amount) : 0;
-                                    const isIncome = tx.type === "INCOME";
-                                    const isEditing = editingTxId === tx.id;
+                            {!isDesktop && (
+                                <div className="md:hidden space-y-3">
+                                    {group.transactions.map((tx: any) => {
+                                        const debitEntry = tx.entries.find((e: any) => e.amount > 0);
+                                        const creditEntry = tx.entries.find((e: any) => e.amount < 0);
+                                        const amount = debitEntry ? Math.abs(debitEntry.amount) : 0;
+                                        const isIncome = tx.type === "INCOME";
+                                        const isEditing = editingTxId === tx.id;
 
-                                    if (isEditing) {
+                                        if (isEditing) {
+                                            return (
+                                                <Card key={tx.id} className="shadow-sm border-l-4 border-l-primary">
+                                                    <CardContent className="p-4">
+                                                        <Form method="post" className="space-y-3">
+                                                            <input type="hidden" name="id" value={tx.id} />
+                                                            <input type="hidden" name="intent" value="edit_transaction" />
+                                                            <div className="flex gap-2">
+                                                                <select name="type" defaultValue={tx.type} className="flex-1 bg-muted/20 border rounded p-1 text-xs">
+                                                                    <option value="EXPENSE">지출</option>
+                                                                    <option value="INCOME">수입</option>
+                                                                </select>
+                                                                <input type="date" name="date" defaultValue={new Date(tx.date).toISOString().split('T')[0]} className="flex-1 bg-muted/20 border rounded p-1 text-xs" />
+                                                            </div>
+                                                            <input type="text" name="description" defaultValue={tx.description} className="w-full bg-muted/20 border rounded p-2 text-sm" placeholder="적요" />
+                                                            <input type="number" name="amount" defaultValue={amount} className="w-full bg-muted/20 border rounded p-2 text-sm font-mono" placeholder="금액" />
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <select name="creditAccountId" defaultValue={creditEntry?.accountId} className="w-full bg-muted/20 border rounded p-1 text-[10px]">
+                                                                    {tx.type === "EXPENSE" ?
+                                                                        assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                                        revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                                    }
+                                                                </select>
+                                                                <select name="debitAccountId" defaultValue={debitEntry?.accountId} className="w-full bg-muted/20 border rounded p-1 text-[10px]">
+                                                                    {tx.type === "EXPENSE" ?
+                                                                        expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
+                                                                        assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
+                                                                    }
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <Button size="sm" type="submit" className="flex-1">저장</Button>
+                                                                <Button size="sm" variant="outline" type="button" onClick={() => setEditingTxId(null)} className="flex-1">취소</Button>
+                                                            </div>
+                                                        </Form>
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        }
+
                                         return (
-                                            <Card key={tx.id} className="shadow-sm border-l-4 border-l-primary">
+                                            <Card key={tx.id} className="shadow-sm border-l-4 border-l-transparent hover:bg-muted/5 active:bg-muted/10 transition-colors" style={{ borderLeftColor: isIncome ? '#2563eb' : '#ef4444' }}>
                                                 <CardContent className="p-4">
-                                                    <Form method="post" className="space-y-3">
-                                                        <input type="hidden" name="id" value={tx.id} />
-                                                        <input type="hidden" name="intent" value="edit_transaction" />
-                                                        <div className="flex gap-2">
-                                                            <select name="type" defaultValue={tx.type} className="flex-1 bg-muted/20 border rounded p-1 text-xs">
-                                                                <option value="EXPENSE">지출</option>
-                                                                <option value="INCOME">수입</option>
-                                                            </select>
-                                                            <input type="date" name="date" defaultValue={new Date(tx.date).toISOString().split('T')[0]} className="flex-1 bg-muted/20 border rounded p-1 text-xs" />
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="flex flex-col">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className={`text - [10px] font - bold px - 1.5 py - 0.5 rounded ${isIncome ? 'bg-blue-100 text-blue-700' : 'bg-red-50 text-red-500'} `}>
+                                                                    {isIncome ? '수입' : '지출'}
+                                                                </span>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {new Date(tx.date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                            <span className="font-semibold text-sm line-clamp-1">{tx.description}</span>
                                                         </div>
-                                                        <input type="text" name="description" defaultValue={tx.description} className="w-full bg-muted/20 border rounded p-2 text-sm" placeholder="적요" />
-                                                        <input type="number" name="amount" defaultValue={amount} className="w-full bg-muted/20 border rounded p-2 text-sm font-mono" placeholder="금액" />
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <select name="creditAccountId" defaultValue={creditEntry?.accountId} className="w-full bg-muted/20 border rounded p-1 text-[10px]">
-                                                                {tx.type === "EXPENSE" ?
-                                                                    assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                                    revenueAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                                }
-                                                            </select>
-                                                            <select name="debitAccountId" defaultValue={debitEntry?.accountId} className="w-full bg-muted/20 border rounded p-1 text-[10px]">
-                                                                {tx.type === "EXPENSE" ?
-                                                                    expenseAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>) :
-                                                                    assetAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)
-                                                                }
-                                                            </select>
+                                                        <div className="flex flex-col items-end">
+                                                            <span className={`font - mono font - bold ${isIncome ? 'text-blue-600' : 'text-red-500'} `}>
+                                                                {isIncome ? '+' : '-'}{KRW.format(amount)}
+                                                            </span>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <button onClick={() => setEditingTxId(tx.id)} className="p-1 text-muted-foreground hover:text-primary transition-colors">
+                                                                    <Pencil className="w-3.5 h-3.5" />
+                                                                </button>
+                                                                <Form method="post" className="inline" onSubmit={(e) => { if (!confirm("정말 삭제하시겠습니까?")) e.preventDefault(); }}>
+                                                                    <input type="hidden" name="id" value={tx.id} />
+                                                                    <input type="hidden" name="intent" value="delete_transaction" />
+                                                                    <button type="submit" className="p-1 text-muted-foreground hover:text-destructive transition-colors">
+                                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </Form>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex gap-2">
-                                                            <Button size="sm" type="submit" className="flex-1">저장</Button>
-                                                            <Button size="sm" variant="outline" type="button" onClick={() => setEditingTxId(null)} className="flex-1">취소</Button>
-                                                        </div>
-                                                    </Form>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-xs pt-2 border-t mt-2">
+                                                        <span className="text-muted-foreground truncate max-w-[40%]">{creditEntry?.account.name || '알 수 없음'}</span>
+                                                        <ArrowRight className="w-3 h-3 text-muted-foreground/50 shrink-0" />
+                                                        <span className={`truncate max - w - [40 %] ${isIncome ? 'text-blue-600' : 'text-primary'} `}>{debitEntry?.account.name || '알 수 없음'}</span>
+                                                    </div>
                                                 </CardContent>
                                             </Card>
                                         );
-                                    }
-
-                                    return (
-                                        <Card key={tx.id} className="shadow-sm border-l-4 border-l-transparent hover:bg-muted/5 active:bg-muted/10 transition-colors" style={{ borderLeftColor: isIncome ? '#2563eb' : '#ef4444' }}>
-                                            <CardContent className="p-4">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <div className="flex flex-col">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className={`text - [10px] font - bold px - 1.5 py - 0.5 rounded ${isIncome ? 'bg-blue-100 text-blue-700' : 'bg-red-50 text-red-500'} `}>
-                                                                {isIncome ? '수입' : '지출'}
-                                                            </span>
-                                                            <span className="text-xs text-muted-foreground">
-                                                                {new Date(tx.date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
-                                                            </span>
-                                                        </div>
-                                                        <span className="font-semibold text-sm line-clamp-1">{tx.description}</span>
-                                                    </div>
-                                                    <div className="flex flex-col items-end">
-                                                        <span className={`font - mono font - bold ${isIncome ? 'text-blue-600' : 'text-red-500'} `}>
-                                                            {isIncome ? '+' : '-'}{KRW.format(amount)}
-                                                        </span>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <button onClick={() => setEditingTxId(tx.id)} className="p-1 text-muted-foreground hover:text-primary transition-colors">
-                                                                <Pencil className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <Form method="post" className="inline" onSubmit={(e) => { if (!confirm("정말 삭제하시겠습니까?")) e.preventDefault(); }}>
-                                                                <input type="hidden" name="id" value={tx.id} />
-                                                                <input type="hidden" name="intent" value="delete_transaction" />
-                                                                <button type="submit" className="p-1 text-muted-foreground hover:text-destructive transition-colors">
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            </Form>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-xs pt-2 border-t mt-2">
-                                                    <span className="text-muted-foreground truncate max-w-[40%]">{creditEntry?.account.name || '알 수 없음'}</span>
-                                                    <ArrowRight className="w-3 h-3 text-muted-foreground/50 shrink-0" />
-                                                    <span className={`truncate max - w - [40 %] ${isIncome ? 'text-blue-600' : 'text-primary'} `}>{debitEntry?.account.name || '알 수 없음'}</span>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    );
-                                })}
-                            </div>
+                                    })}
+                                </div>
+                            )}
                         </div>
                     ))
                 )}
