@@ -6,6 +6,7 @@ const menuItems = [
     { icon: Home, label: "홈", to: "/" },
     { icon: BarChart3, label: "대시보드", to: "/dashboard" },
     { icon: Wallet, label: "가계부", to: "/ledger" },
+    { icon: LayoutDashboard, label: "가계부 통계", to: "/ledger-dashboard" },
     { icon: PieChart, label: "자산 현황", to: "/assets" },
     { icon: Settings, label: "설정", to: "/settings" },
 ];
