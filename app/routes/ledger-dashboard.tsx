@@ -65,9 +65,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     transactions.forEach(tx => {
-        // tx.date를 startDateからの月数に変換
-        const txDate = new Date(tx.date);
-        const diffMonths = (txDate.getFullYear() - startDate.getFullYear()) * 12 + (txDate.getMonth() - startDate.getMonth());
+        // 시간대(Asia/Seoul)를 고려하여 tx.date에서 년, 월 추출
+        const parts = new Intl.DateTimeFormat('ko-KR', {
+            year: 'numeric',
+            month: 'numeric',
+            timeZone: 'Asia/Seoul'
+        }).formatToParts(new Date(tx.date));
+
+        const txYear = parseInt(parts.find(p => p.type === 'year')?.value || "0");
+        const txMonth = parseInt(parts.find(p => p.type === 'month')?.value || "0");
+
+        const diffMonths = (txYear - startDate.getFullYear()) * 12 + (txMonth - 1 - startDate.getMonth());
 
         if (diffMonths >= 0 && diffMonths < 12) {
             const incomeEntry = tx.entries.find(e => Number(e.amount) > 0);

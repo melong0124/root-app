@@ -39,9 +39,20 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     const monthlyGroups: { [key: string]: { transactions: any[], totalIncome: number, totalExpense: number, net: number } } = {};
 
+    // 시간대(Asia/Seoul)를 고려하여 월별 키 생성
+    const getYM = (d: Date) => {
+        const parts = new Intl.DateTimeFormat('ko-KR', {
+            year: 'numeric',
+            month: '2-digit',
+            timeZone: 'Asia/Seoul'
+        }).formatToParts(new Date(d));
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        return `${year}-${month}`;
+    };
+
     transactions.forEach((tx: any) => {
-        const date = new Date(tx.date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthKey = getYM(tx.date);
 
         if (!monthlyGroups[monthKey]) {
             monthlyGroups[monthKey] = { transactions: [], totalIncome: 0, totalExpense: 0, net: 0 };
@@ -97,14 +108,18 @@ export async function action({ request }: Route.ActionArgs) {
         const debitAccountIds = formData.getAll("debitAccountId") as string[];
         const userId = formData.get("userId") as string;
 
-        const transactions = dates.map((date, i) => ({
-            date: new Date(date),
-            description: descriptions[i],
-            amount: parseFloat(amounts[i]),
-            type: types[i],
-            creditAccountId: creditAccountIds[i],
-            debitAccountId: debitAccountIds[i],
-        })).filter(t => t.description && !isNaN(t.amount));
+        const transactions = dates.map((date, i) => {
+            // YYYY-MM -> YYYY-MM-01
+            const formattedDate = date.length === 7 ? `${date}-01` : date;
+            return {
+                date: new Date(formattedDate),
+                description: descriptions[i],
+                amount: parseFloat(amounts[i]),
+                type: types[i],
+                creditAccountId: creditAccountIds[i],
+                debitAccountId: debitAccountIds[i],
+            };
+        }).filter(t => t.description && !isNaN(t.amount));
 
         if (transactions.length === 0) return { error: "입력된 거래가 없습니다." };
 
@@ -134,7 +149,10 @@ export async function action({ request }: Route.ActionArgs) {
 
     if (intent === "edit_transaction") {
         const id = formData.get("id") as string;
-        const date = new Date(formData.get("date") as string);
+        const dateStr = formData.get("date") as string;
+        // YYYY-MM -> YYYY-MM-01
+        const formattedDate = dateStr.length === 7 ? `${dateStr}-01` : dateStr;
+        const date = new Date(formattedDate);
         const description = formData.get("description") as string;
         const amount = parseFloat(formData.get("amount") as string);
         const type = formData.get("type") as string;
@@ -220,19 +238,19 @@ export default function Ledger() {
     }, []);
 
     const [rows, setRows] = useState<Row[]>([
-        { id: Math.random().toString(), date: new Date().toISOString().split('T', 1)[0], description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }
+        { id: Math.random().toString(), date: new Date().toISOString().slice(0, 7), description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }
     ]);
 
     useEffect(() => {
         if (actionData?.success) {
-            setRows([{ id: Math.random().toString(), date: new Date().toISOString().split('T')[0], description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }]);
+            setRows([{ id: Math.random().toString(), date: new Date().toISOString().slice(0, 7), description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }]);
             formRef.current?.reset();
             setEditingTxId(null);
         }
     }, [actionData, assetAccounts, expenseAccounts]);
 
     const addRow = () => {
-        setRows([...rows, { id: Math.random().toString(), date: new Date().toISOString().split('T')[0], description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }]);
+        setRows([...rows, { id: Math.random().toString(), date: new Date().toISOString().slice(0, 7), description: "", amount: "", type: "EXPENSE", creditAccountId: assetAccounts[0]?.id || "", debitAccountId: expenseAccounts[0]?.id || "" }]);
     };
 
     const removeRow = (id: string) => {
@@ -287,7 +305,7 @@ export default function Ledger() {
                                         <thead>
                                             <tr className="bg-muted/50 border-b">
                                                 <th className="px-4 py-3 font-semibold text-muted-foreground w-24">구분</th>
-                                                <th className="px-4 py-3 font-semibold text-muted-foreground w-36">날짜</th>
+                                                <th className="px-4 py-3 font-semibold text-muted-foreground w-36">년월</th>
                                                 <th className="px-4 py-3 font-semibold text-muted-foreground min-w-[180px]">적요 (내용)</th>
                                                 <th className="px-4 py-3 font-semibold text-muted-foreground w-32 text-right">금액 (KRW)</th>
                                                 <th className="px-4 py-3 font-semibold text-muted-foreground w-40">출처 (자금원)</th>
@@ -310,7 +328,7 @@ export default function Ledger() {
                                                         </select>
                                                     </td>
                                                     <td className="px-4 py-2">
-                                                        <input type="date" name="date" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all text-muted-foreground" value={row.date} onChange={(e) => updateRow(row.id, "date", e.target.value)} required />
+                                                        <input type="month" name="date" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all text-muted-foreground" value={row.date} onChange={(e) => updateRow(row.id, "date", e.target.value)} required />
                                                     </td>
                                                     <td className="px-4 py-2">
                                                         <input type="text" name="description" className="w-full bg-transparent border-none focus:ring-1 focus:ring-primary rounded p-1.5 outline-none transition-all" placeholder="거래 내용을 입력하세요" value={row.description} onChange={(e) => updateRow(row.id, "description", e.target.value)} required />
@@ -379,7 +397,7 @@ export default function Ledger() {
                                                         <option value="INCOME">수입</option>
                                                     </select>
                                                     <input
-                                                        type="date"
+                                                        type="month"
                                                         name="date"
                                                         className="bg-transparent text-sm outline-none text-muted-foreground"
                                                         value={row.date}
@@ -501,7 +519,7 @@ export default function Ledger() {
                                                 <thead>
                                                     <tr className="bg-muted/30 border-b">
                                                         <th className="px-4 py-2 font-semibold text-muted-foreground w-20">구분</th>
-                                                        <th className="px-4 py-2 font-semibold text-muted-foreground w-32">날짜</th>
+                                                        <th className="px-4 py-2 font-semibold text-muted-foreground w-32">년월</th>
                                                         <th className="px-4 py-2 font-semibold text-muted-foreground">적요 (내역)</th>
                                                         <th className="px-4 py-2 font-semibold text-muted-foreground text-right w-36">금액</th>
                                                         <th className="px-4 py-2 font-semibold text-muted-foreground w-64">거래 흐름</th>
@@ -530,7 +548,7 @@ export default function Ledger() {
                                                                                     </select>
                                                                                 </div>
                                                                                 <div className="w-32 shrink-0">
-                                                                                    <input type="date" name="date" defaultValue={new Date(tx.date).toISOString().split('T')[0]} className="w-full bg-background border rounded p-1 text-xs" />
+                                                                                    <input type="month" name="date" defaultValue={new Date(tx.date).toISOString().slice(0, 7)} className="w-full bg-background border rounded p-1 text-xs" />
                                                                                 </div>
                                                                                 <div className="flex-1 min-w-[150px]">
                                                                                     <input type="text" name="description" defaultValue={tx.description} className="w-full bg-background border rounded p-1 text-xs" />
@@ -573,7 +591,7 @@ export default function Ledger() {
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
-                                                                    {new Date(tx.date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                                                                    {new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(tx.date))}
                                                                 </td>
                                                                 <td className="px-4 py-3 font-medium max-w-[300px] truncate">
                                                                     {tx.description}
@@ -634,7 +652,7 @@ export default function Ledger() {
                                                                     <option value="EXPENSE">지출</option>
                                                                     <option value="INCOME">수입</option>
                                                                 </select>
-                                                                <input type="date" name="date" defaultValue={new Date(tx.date).toISOString().split('T')[0]} className="flex-1 bg-muted/20 border rounded p-1 text-xs" />
+                                                                <input type="month" name="date" defaultValue={new Date(tx.date).toISOString().slice(0, 7)} className="flex-1 bg-muted/20 border rounded p-1 text-xs" />
                                                             </div>
                                                             <input type="text" name="description" defaultValue={tx.description} className="w-full bg-muted/20 border rounded p-2 text-sm" placeholder="적요" />
                                                             <input type="number" name="amount" defaultValue={amount} className="w-full bg-muted/20 border rounded p-2 text-sm font-mono" placeholder="금액" />
@@ -672,7 +690,7 @@ export default function Ledger() {
                                                                     {isIncome ? '수입' : '지출'}
                                                                 </span>
                                                                 <span className="text-xs text-muted-foreground">
-                                                                    {new Date(tx.date).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
+                                                                    {new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: '2-digit', timeZone: 'Asia/Seoul' }).format(new Date(tx.date))}
                                                                 </span>
                                                             </div>
                                                             <span className="font-semibold text-sm line-clamp-1">{tx.description}</span>
