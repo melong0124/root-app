@@ -107,7 +107,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Process all assets
     // @ts-ignore
-    assets.forEach((asset) => {
+    assets.forEach((asset, index) => {
+        if (index === 0) {
+            console.log('🔍 [Assets Loader] Sample asset values:', asset.values.map((v: any) => ({
+                date: v.date,
+                dateTime: v.date.getTime(),
+                amount: v.amount?.toNumber()
+            })));
+            console.log('🔍 [Assets Loader] Looking for dates:', {
+                selectedDate: selectedDate,
+                selectedDateTime: selectedDate.getTime(),
+                prevDate: prevDate,
+                prevDateTime: prevDate.getTime()
+            });
+        }
+
         // Current month value
         const currentValueRecord = asset.values.find((v: any) =>
             v.date.getTime() === selectedDate.getTime()
@@ -119,6 +133,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
             v.date.getTime() === prevDate.getTime()
         );
         const prevValue = prevValueRecord?.amount?.toNumber() ?? 0;
+
+        if (index === 0) {
+            console.log('🔍 [Assets Loader] First asset values:', {
+                currentValue: assetValue,
+                prevValue: prevValue,
+                currentFound: !!currentValueRecord,
+                prevFound: !!prevValueRecord
+            });
+        }
 
         // Calculate change
         const change = assetValue - prevValue;
