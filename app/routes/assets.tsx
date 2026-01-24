@@ -41,11 +41,8 @@ function isLiability(category: AssetCategory): boolean {
 // --- Loader ---
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    console.log('🔍 [Assets Loader] Starting...');
-
     // 인증 체크
-    const session = await requireAuth(request);
-    console.log('🔍 [Assets Loader] Auth session:', session ? 'exists' : 'null');
+    await requireAuth(request);
 
     const url = new URL(request.url);
     const yearParam = url.searchParams.get("year");
@@ -55,8 +52,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
     const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
 
-    console.log('🔍 [Assets Loader] Date params:', { year, month });
-
     // First day of the selected month
     const selectedDate = new Date(year, month - 1, 1);
 
@@ -65,34 +60,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const prevYear = month === 1 ? year - 1 : year;
     const prevDate = new Date(prevYear, prevMonth - 1, 1);
 
-    console.log('🔍 [Assets Loader] Querying assets...');
-
-    // 모든 자산 조회
+    // 모든 자산 조회 (Prisma 중첩 필터링 이슈 방지를 위해 JavaScript에서 필터링)
     const assets = await prisma.asset.findMany({
         include: {
             values: true,
         },
     });
 
-    // 디버깅: 전체 AssetValue 개수 확인 (RLS 체크용)
-    const totalValuesCount = await prisma.assetValue.count();
-    console.log('🔍 [Assets Loader] Total AssetValue records in DB:', totalValuesCount);
-    console.log('🔍 [Assets Loader] Assets found count:', assets.length);
-
-    if (assets.length > 0) {
-        const assetsWithValues = assets.filter(a => a.values.length > 0);
-        console.log('🔍 [Assets Loader] Assets that actually HAVE values:', assetsWithValues.length);
-        if (assetsWithValues.length > 0) {
-            console.log('🔍 [Assets Loader] First 3 assets with values:', assetsWithValues.slice(0, 3).map(a => ({
-                name: a.name,
-                vals: a.values.length
-            })));
-        }
-    }
-
     // 첫 번째 사용자 ID 가져오기
     const firstUser = await prisma.user.findFirst();
-    console.log('🔍 [Assets Loader] First user:', firstUser ? firstUser.id : 'NOT FOUND');
     if (!firstUser) throw new Error("No user found in database");
 
     // Group assets by category
@@ -114,19 +90,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Process all assets
     // @ts-ignore
     assets.forEach((asset, index) => {
-        if (index === 0) {
-            console.log('🔍 [Assets Loader] Sample asset values:', asset.values.map((v: any) => ({
-                date: v.date,
-                dateTime: v.date.getTime(),
-                amount: v.amount?.toNumber()
-            })));
-            console.log('🔍 [Assets Loader] Looking for dates:', {
-                selectedDate: selectedDate,
-                selectedDateTime: selectedDate.getTime(),
-                prevDate: prevDate,
-                prevDateTime: prevDate.getTime()
-            });
-        }
 
         // Helper to convert date to KST Year-Month string for robust comparison
         const getYM = (d: Date) => {
@@ -147,14 +110,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         // Previous month value
         const prevValueRecord = asset.values.find((v: any) => getYM(v.date) === targetPrevYM);
         const prevValue = prevValueRecord?.amount?.toNumber() ?? 0;
-
-        if (index === 0) {
-            console.log('🔍 [Assets Loader] Matching debug:', {
-                targetYM,
-                dbValueDates: asset.values.map((v: any) => getYM(v.date)),
-                currentFound: !!currentValueRecord
-            });
-        }
 
         // Calculate change
         const change = assetValue - prevValue;

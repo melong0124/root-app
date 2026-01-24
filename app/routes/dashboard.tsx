@@ -28,20 +28,14 @@ function isLiability(category: AssetCategory): boolean {
 // --- Loader ---
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    console.log('🔍 [Dashboard Loader] Starting...');
-
     // 인증 체크
-    const session = await requireAuth(request);
-    console.log('🔍 [Dashboard Loader] Auth session:', session ? 'exists' : 'null');
+    await requireAuth(request);
 
     const url = new URL(request.url);
     const yearParam = url.searchParams.get("year");
 
     const now = new Date();
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
-
-    console.log('🔍 [Dashboard Loader] Year param:', year);
-    console.log('🔍 [Dashboard Loader] Querying assets...');
 
     // 모든 자산 조회 (사용자 구분 없이)
     const assets = await prisma.asset.findMany({
@@ -50,11 +44,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
     });
 
-    console.log('🔍 [Dashboard Loader] Assets found:', assets.length);
-
     // 첫 번째 사용자 ID 가져오기
     const firstUser = await prisma.user.findFirst();
-    console.log('🔍 [Dashboard Loader] First user:', firstUser ? firstUser.id : 'NOT FOUND');
     if (!firstUser) throw new Error("No user found in database");
 
     // Helper to convert date to KST Year-Month string for robust comparison
