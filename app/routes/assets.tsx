@@ -67,15 +67,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     console.log('🔍 [Assets Loader] Querying assets...');
 
-    // 모든 자산 조회 (사용자 구분 없이)
-    // Note: Fetching all values because nested where clause doesn't work properly in Vercel
+    // 모든 자산 조회
     const assets = await prisma.asset.findMany({
         include: {
             values: true,
         },
     });
 
-    console.log('🔍 [Assets Loader] Assets found:', assets.length);
+    // 디버깅: 전체 AssetValue 개수 확인 (RLS 체크용)
+    const totalValuesCount = await prisma.assetValue.count();
+    console.log('🔍 [Assets Loader] Total AssetValue records in DB:', totalValuesCount);
+    console.log('🔍 [Assets Loader] Assets found count:', assets.length);
+
+    if (assets.length > 0) {
+        const assetsWithValues = assets.filter(a => a.values.length > 0);
+        console.log('🔍 [Assets Loader] Assets that actually HAVE values:', assetsWithValues.length);
+        if (assetsWithValues.length > 0) {
+            console.log('🔍 [Assets Loader] First 3 assets with values:', assetsWithValues.slice(0, 3).map(a => ({
+                name: a.name,
+                vals: a.values.length
+            })));
+        }
+    }
 
     // 첫 번째 사용자 ID 가져오기
     const firstUser = await prisma.user.findFirst();
