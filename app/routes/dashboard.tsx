@@ -238,8 +238,8 @@ export default function DashboardPage() {
             <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-4 -mx-4 px-4 border-b mb-4 transition-all">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight text-foreground">연간 자산 대시보드</h1>
-                        <p className="text-muted-foreground mt-1">1년간의 자산 성과를 한눈에 확인하세요.</p>
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground">자산현황 통계</h1>
+                        <p className="text-muted-foreground mt-1">연간 자산 변동 및 현황을 한눈에 확인하세요.</p>
                     </div>
                     <Card className="bg-background/50 border-border/60 shadow-sm">
                         <div className="px-4 py-2">
