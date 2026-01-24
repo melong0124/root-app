@@ -46,9 +46,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // 모든 자산 조회 (사용자 구분 없이)
     const assets = await prisma.asset.findMany({
         include: {
-            values: {
-                orderBy: { date: 'asc' }
-            },
+            values: true,
         },
     });
 
@@ -58,6 +56,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const firstUser = await prisma.user.findFirst();
     console.log('🔍 [Dashboard Loader] First user:', firstUser ? firstUser.id : 'NOT FOUND');
     if (!firstUser) throw new Error("No user found in database");
+
+    // Helper to check if two dates are same year/month/day
+    const isSameDay = (d1: Date, d2: Date) =>
+        d1.getUTCFullYear() === d2.getUTCFullYear() &&
+        d1.getUTCMonth() === d2.getUTCMonth() &&
+        d1.getUTCDate() === d2.getUTCDate();
 
     // Initialize monthly data for the selected year
     const monthlyData: Array<{
@@ -84,9 +88,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         let totalLiabilities = 0;
 
         assets.forEach((asset) => {
-            const valueRecord = asset.values.find((v: any) =>
-                v.date.getTime() === targetDate.getTime()
-            );
+            const valueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), targetDate));
             const assetValue = valueRecord?.amount?.toNumber() ?? 0;
 
             const category = asset.category as AssetCategory;
@@ -129,7 +131,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             const prevDecDate = new Date(year - 1, 11, 1);
             let prevDecNetWorth = 0;
             assets.forEach(asset => {
-                const val = asset.values.find(v => v.date.getTime() === prevDecDate.getTime());
+                const val = asset.values.find((v: any) => isSameDay(new Date(v.date), prevDecDate));
                 const amt = val?.amount?.toNumber() ?? 0;
                 if (isLiability(asset.category as AssetCategory)) prevDecNetWorth -= amt;
                 else prevDecNetWorth += amt;
@@ -147,9 +149,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const prevDecDate = new Date(year - 1, 11, 1);
 
     assets.forEach((asset) => {
-        const valueRecord = asset.values.find((v: any) =>
-            v.date.getTime() === prevDecDate.getTime()
-        );
+        const valueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), prevDecDate));
         const assetValue = valueRecord?.amount?.toNumber() ?? 0;
 
         if (isLiability(asset.category as AssetCategory)) {
@@ -179,7 +179,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         let assetsSum = 0;
         let liabilitiesSum = 0;
         assets.forEach((asset: any) => {
-            const val = asset.values.find((v: any) => v.date.getTime() === targetDate.getTime());
+            const val = asset.values.find((v: any) => isSameDay(new Date(v.date), targetDate));
             const amt = val?.amount?.toNumber() ?? 0;
             if (isLiability(asset.category as AssetCategory)) liabilitiesSum += amt;
             else assetsSum += amt;

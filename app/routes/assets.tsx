@@ -68,17 +68,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     console.log('🔍 [Assets Loader] Querying assets...');
 
     // 모든 자산 조회 (사용자 구분 없이)
+    // Note: Fetching all values because nested where clause doesn't work properly in Vercel
     const assets = await prisma.asset.findMany({
         include: {
-            // @ts-ignore
-            values: {
-                where: {
-                    OR: [
-                        { date: selectedDate },
-                        { date: prevDate }
-                    ]
-                },
-            },
+            values: true,
         },
     });
 
@@ -122,20 +115,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
             });
         }
 
+        // Helper to check if two dates are same year/month/day
+        const isSameDay = (d1: Date, d2: Date) =>
+            d1.getUTCFullYear() === d2.getUTCFullYear() &&
+            d1.getUTCMonth() === d2.getUTCMonth() &&
+            d1.getUTCDate() === d2.getUTCDate();
+
         // Current month value
-        const currentValueRecord = asset.values.find((v: any) =>
-            v.date.getTime() === selectedDate.getTime()
-        );
+        const currentValueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), selectedDate));
         const assetValue = currentValueRecord?.amount?.toNumber() ?? 0;
 
         // Previous month value
-        const prevValueRecord = asset.values.find((v: any) =>
-            v.date.getTime() === prevDate.getTime()
-        );
+        const prevValueRecord = asset.values.find((v: any) => isSameDay(new Date(v.date), prevDate));
         const prevValue = prevValueRecord?.amount?.toNumber() ?? 0;
 
         if (index === 0) {
-            console.log('🔍 [Assets Loader] First asset values:', {
+            console.log('🔍 [Assets Loader] First asset values processed:', {
                 currentValue: assetValue,
                 prevValue: prevValue,
                 currentFound: !!currentValueRecord,
