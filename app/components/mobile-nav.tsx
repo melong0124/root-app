@@ -3,8 +3,7 @@ import { Wallet, PieChart, Settings, Home, BarChart3, LayoutDashboard } from "lu
 import { cn } from "~/lib/utils";
 
 const menuItems = [
-    { icon: Home, label: "홈", to: "/" },
-    { icon: Wallet, label: "가계부", to: "/ledger" },
+    { icon: Wallet, label: "가계부", to: "/" },
     { icon: LayoutDashboard, label: "통계", to: "/ledger-dashboard" },
     { icon: PieChart, label: "자산", to: "/assets" },
     { icon: BarChart3, label: "자산현황 통계", to: "/dashboard" },
