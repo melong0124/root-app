@@ -1,5 +1,5 @@
 import { NavLink, Form } from "react-router";
-import { Wallet, PieChart, Settings, LayoutDashboard, BarChart3, Home, LogOut } from "lucide-react";
+import { Wallet, PieChart, Settings, LayoutDashboard, BarChart3, Home, LogOut, LogIn } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 const menuItems = [
@@ -10,7 +10,12 @@ const menuItems = [
     { icon: Settings, label: "설정", to: "/settings" },
 ];
 
-export function Sidebar() {
+import type { User } from "@supabase/supabase-js";
+
+export function Sidebar({ user }: { user: User | null }) {
+    const userEmail = user?.email || "사용자";
+    const userInitial = user?.email ? user.email.substring(0, 1).toUpperCase() : "U";
+
     return (
         <aside className="w-64 border-r bg-card h-screen flex flex-col sticky top-0">
             <div className="p-6 border-b">
@@ -46,24 +51,38 @@ export function Sidebar() {
                 ))}
             </nav>
             <div className="p-4 border-t mt-auto space-y-3">
-                <Form method="post" action="/logout">
-                    <button
-                        type="submit"
-                        className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group"
+                {user ? (
+                    <>
+                        <Form method="post" action="/logout">
+                            <button
+                                type="submit"
+                                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group"
+                            >
+                                <LogOut className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" />
+                                <span className="font-medium">로그아웃</span>
+                            </button>
+                        </Form>
+                        <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                                <span className="text-xs font-bold text-primary">{userInitial}</span>
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-semibold truncate leading-none mb-1">
+                                    {user.user_metadata?.full_name || user.email?.split('@')[0] || "사용자"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground truncate">{user.email}</span>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <NavLink
+                        to="/login"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 rounded-md transition-all duration-200 text-muted-foreground hover:bg-primary/10 hover:text-primary group"
                     >
-                        <LogOut className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="font-medium">로그아웃</span>
-                    </button>
-                </Form>
-                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span className="text-xs font-bold text-primary">SC</span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-semibold truncate leading-none mb-1">사용자</span>
-                        <span className="text-[10px] text-muted-foreground truncate">Free Plan</span>
-                    </div>
-                </div>
+                        <LogIn className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" />
+                        <span className="font-medium">로그인</span>
+                    </NavLink>
+                )}
             </div>
         </aside>
     );

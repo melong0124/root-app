@@ -25,8 +25,13 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export async function loader() {
+import { getUserFromSession } from "./lib/session.server";
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const user = await getUserFromSession(request);
+
   return {
+    user,
     ENV: {
       SUPABASE_URL: process.env.SUPABASE_URL,
       SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY,
@@ -49,7 +54,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body className="flex min-h-screen bg-background text-foreground">
         <div className="hidden md:flex">
-          <Sidebar />
+          <Sidebar user={data?.user} />
         </div>
         <main className="flex-1 h-[100dvh] overflow-y-auto w-full pb-16 md:pb-0">
           {children}
