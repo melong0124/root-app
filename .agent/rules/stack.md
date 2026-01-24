@@ -42,6 +42,10 @@ trigger: always_on
 ## 💰 Domain Specifics (Asset Management)
 - 실시간 자산 업데이트가 필요한 경우 Remix의 `shouldRevalidate` 옵션을 활용하여 효율적으로 데이터를 갱신한다.
 - 보안이 중요한 금융 데이터 처리는 반드시 서버측 `action`에서 검증 후 처리한다.
+- **Date Handling & Timezone:** 
+  - Vercel(UTC)과 로컬(KST) 간의 시간대 차이로 인해 `Date.getTime()` 또는 DB 레벨의 날짜 필터링이 오작동할 수 있다.
+  - 날짜 비교 시에는 `Intl.DateTimeFormat`을 사용하여 **'Asia/Seoul' 시간대 기준의 문자열(예: 연. 월.)을 비교**하는 방식을 권장한다.
+  - Prisma 쿼리 시 중첩된 쿼리 안의 `where` 절 날짜 필터링(`include: { values: { where: ... } }`) 보다는, 전체 데이터를 가져온 후 JavaScript 단에서 시간대를 고려하여 필터링하는 것이 안전하다.
 
 ## ⌨️ Code Style Guide (General & React)
 
