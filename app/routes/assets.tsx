@@ -41,8 +41,11 @@ function isLiability(category: AssetCategory): boolean {
 // --- Loader ---
 
 export async function loader({ request }: LoaderFunctionArgs) {
+    console.log('🔍 [Assets Loader] Starting...');
+
     // 인증 체크
-    await requireAuth(request);
+    const session = await requireAuth(request);
+    console.log('🔍 [Assets Loader] Auth session:', session ? 'exists' : 'null');
 
     const url = new URL(request.url);
     const yearParam = url.searchParams.get("year");
@@ -52,6 +55,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
     const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
 
+    console.log('🔍 [Assets Loader] Date params:', { year, month });
+
     // First day of the selected month
     const selectedDate = new Date(year, month - 1, 1);
 
@@ -59,6 +64,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
     const prevDate = new Date(prevYear, prevMonth - 1, 1);
+
+    console.log('🔍 [Assets Loader] Querying assets...');
 
     // 모든 자산 조회 (사용자 구분 없이)
     const assets = await prisma.asset.findMany({
@@ -75,8 +82,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
     });
 
+    console.log('🔍 [Assets Loader] Assets found:', assets.length);
+
     // 첫 번째 사용자 ID 가져오기
     const firstUser = await prisma.user.findFirst();
+    console.log('🔍 [Assets Loader] First user:', firstUser ? firstUser.id : 'NOT FOUND');
     if (!firstUser) throw new Error("No user found in database");
 
     // Group assets by category
