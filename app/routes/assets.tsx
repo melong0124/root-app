@@ -49,8 +49,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const monthParam = url.searchParams.get("month");
 
     const now = new Date();
-    const year = yearParam ? parseInt(yearParam) : now.getFullYear();
-    const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
+    // Asia/Seoul 시간대 기준으로 현재 연/월 계산
+    const seoulFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: 'numeric',
+    });
+    const parts = seoulFormatter.formatToParts(now);
+    const seoulYear = parseInt(parts.find(p => p.type === 'year')?.value || "0");
+    const seoulMonth = parseInt(parts.find(p => p.type === 'month')?.value || "0");
+
+    // 기본값은 전월로 설정
+    let defaultYear = seoulYear;
+    let defaultMonth = seoulMonth - 1;
+    if (defaultMonth === 0) {
+        defaultMonth = 12;
+        defaultYear -= 1;
+    }
+
+    const year = yearParam ? parseInt(yearParam) : defaultYear;
+    const month = monthParam ? parseInt(monthParam) : defaultMonth;
 
     // First day of the selected month
     const selectedDate = new Date(year, month - 1, 1);
