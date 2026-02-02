@@ -81,7 +81,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // 모든 자산 조회 (Prisma 중첩 필터링 이슈 방지를 위해 JavaScript에서 필터링)
     const assets = await prisma.asset.findMany({
         include: {
-            values: true,
+            values: {
+                orderBy: {
+                    date: 'desc'
+                }
+            },
         },
     });
 
@@ -121,7 +125,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         const targetYM = getYM(selectedDate);
         const targetPrevYM = getYM(prevDate);
 
-        // Current month value
+        // Current month value - Pick the most recent one if duplicates exist due to date mismatch
         const currentValueRecord = asset.values.find((v: any) => getYM(v.date) === targetYM);
         const assetValue = currentValueRecord?.amount?.toNumber() ?? 0;
 
@@ -182,12 +186,21 @@ export async function action({ request }: ActionFunctionArgs) {
     const year = parseInt(formData.get("year") as string);
     const month = parseInt(formData.get("month") as string);
 
-    const targetDate = new Date(year, month - 1, 1);
+    const targetDate = new Date(Date.UTC(year, month - 1, 1));
 
     if (intent === "update_value") {
         const assetId = formData.get("assetId") as string;
         const amountStr = formData.get("amount") as string;
         const amount = parseFloat(amountStr || "0");
+
+        // Safeguard against extreme values (e.g. trillion bug)
+        if (Math.abs(amount) > 1000000000000) { // 1 Trillion limit
+            return { success: false, error: "Value too large" };
+        }
+
+        // Use a more robust date normalization for upsert to match with loader calculation
+        // The loader uses getYM which handles different timezones, but upsert needs an exact match.
+        // We ensure all dates are stored at 00:00:00 UTC of the first day.
 
         // @ts-ignore
         await prisma.assetValue.upsert({
@@ -225,13 +238,14 @@ function AssetAmountInput({
     onSave: (val: string) => void;
 }) {
     const [raw, setRaw] = useState(initialValue?.toString() || "");
+    const [isFocused, setIsFocused] = useState(false);
 
     useEffect(() => {
-        setRaw(current => {
-            if (parseFloat(current) === initialValue) return current;
-            return initialValue?.toString() || ""
-        });
-    }, [initialValue]);
+        // Only update raw value from initialValue if user is not currently focused on the input
+        if (!isFocused) {
+            setRaw(initialValue?.toString() || "");
+        }
+    }, [initialValue, isFocused]);
 
     const formatDisplay = (str: string) => {
         if (!str) return "";
@@ -257,7 +271,12 @@ function AssetAmountInput({
         }
     };
 
+    const handleFocus = () => {
+        setIsFocused(true);
+    };
+
     const handleBlur = () => {
+        setIsFocused(false);
         if (!isReadOnly) {
             onSave(raw);
         }
@@ -271,13 +290,14 @@ function AssetAmountInput({
 
     return (
         <input
-            type="text"
+            type={isFocused ? "number" : "text"}
             className={`pl-8 pr-3 py-1.5 w-full md:w-40 text-right rounded-md border-transparent transition-all font-mono font-bold ${isReadOnly
                 ? 'bg-transparent text-muted-foreground cursor-not-allowed'
                 : 'bg-muted/30 focus:bg-background focus:ring-1 focus:ring-primary outline-none'
                 }`}
-            value={formatDisplay(raw)}
+            value={isFocused ? raw : formatDisplay(raw)}
             onChange={handleChange}
+            onFocus={handleFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             readOnly={isReadOnly}
