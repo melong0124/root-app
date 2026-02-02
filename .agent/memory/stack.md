@@ -1,6 +1,12 @@
 
-
 # Project Context: Asset Management Web (Remix / React Router v7)
+
+### 📁 AI Agent Configuration (.agent)
+이 프로젝트는 Antigravity 표준 지침을 준수하여 에이전트 설정을 관리합니다.
+- **`memory/`**: 장기 기억 공간입니다. 프로젝트의 변하지 않는 맥락(기술 스택, 인프라 정보)을 `stack.md`에 저장합니다.
+- **`rules/`**: 가이드라인 공간입니다. 코딩 스타일, 보안 제약, 비즈니스 규칙을 `stack.md`에 정의하여 에이전트의 동작을 규제합니다.
+- **`skills/`**: 재사용 가능한 기술 패키지 공간입니다. 특정 작업 수행 방식(SKILL.md)을 저장합니다.
+- **`workflows/`**: 작업 흐름 공간입니다. 복잡한 절차를 마크다운 형태의 워크플로우로 정의하여 슬래시 명령어로 활용합니다.
 
 ## 🔐 Git Identity & Environment
 - **GitHub Account:** `melong0124` (Personal Account)
@@ -10,58 +16,10 @@
 - **Authentication & Push:** 
   - 기본적으로 `gh auth switch`를 통해 계정을 전환하여 사용할 수 있으나, 인증 토큰 충돌 발생 시 아래 명령어로 강제 푸시한다.
   - `git push -u "https://$(gh auth token)@github.com/melong0124/root-app.git" main` 
-  - **Email Privacy:** GitHub 설정에서 "Block command line pushes that expose my email" 옵션이 켜져 있을 경우 푸시가 거부될 수 있으므로 필요 시 해제한다.
 
-## 🌐 Port Configuration (고정)
-
-### Frontend (Vite Dev Server)
-- **Port:** `5174` (고정)
-- **URL:** `http://localhost:5174`
-
-### Backend (Supabase Local)
-- **Port:** `54321` (고정)
-- **URL:** `http://localhost:54321`
-
-### 포트 충돌 해결 방법
-
-만약 해당 포트에서 이미 다른 프로세스가 실행 중이라면, 다음 명령어로 프로세스를 종료하고 다시 실행하세요:
-
-#### macOS/Linux:
-```bash
-# 5174 포트 사용 중인 프로세스 확인 및 종료
-lsof -ti:5174 | xargs kill -9
-
-# 54321 포트 사용 중인 프로세스 확인 및 종료
-lsof -ti:54321 | xargs kill -9
-
-# 서버 재시작
-npm run dev
-```
-
-#### Windows (PowerShell):
-```powershell
-# 5174 포트 사용 중인 프로세스 확인 및 종료
-Get-Process -Id (Get-NetTCPConnection -LocalPort 5174).OwningProcess | Stop-Process -Force
-
-# 54321 포트 사용 중인 프로세스 확인 및 종료
-Get-Process -Id (Get-NetTCPConnection -LocalPort 54321).OwningProcess | Stop-Process -Force
-
-# 서버 재시작
-npm run dev
-```
-
-### Vite 포트 고정 설정
-
-`vite.config.ts` 파일에서 포트를 고정:
-
-```typescript
-export default defineConfig({
-  server: {
-    port: 5174,
-    strictPort: true, // 포트가 사용 중이면 에러 발생
-  },
-});
-```
+## 🌐 Port Configuration
+- **Frontend (Vite):** `5174` (URL: `http://localhost:5174`)
+- **Backend (Supabase Local):** `54321` (URL: `http://localhost:54321`)
 
 ## 🛠 Core Technology Stack
 - **Framework:** Remix (React Router v7 Framework mode)
@@ -69,106 +27,16 @@ export default defineConfig({
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS + shadcn/ui
 - **Data Fetching:** Remix Loaders & Actions (Standard)
-- **State Management:** 
-  - Server-Client Sync: Remix Navigation State
-  - Client-only: Zustand (Optional, for UI local state)
-- **Validation:** Zod (Essential for Action data validation)
-- **Charts:** Recharts (for Financial Data Visualization)
+- **Database:** Supabase (Auth/DB/RLS)
+- **ORM:** Prisma
+- **State Management:** Remix Navigation State, Zustand (Optional)
+- **Charts:** Recharts
 
-## 🗄️ Database & Backend (Supabase)
-- **ORM:** Prisma 또는 Drizzle ORM을 사용하여 타입 안전성을 확보한다.
-- **Auth:** Supabase Auth를 사용하며, Remix의 `loader`에서 세션을 체크한다.
-- **Security:** 모든 테이블에 RLS(Row Level Security)를 설정하여 본인의 자산 데이터만 조회 가능하도록 한다.
+## 🚀 Development Workflow & Scripts
+1. `npm run dev`: 개발 서버 실행
+2. `npx prisma migrate dev`: DB 마이그레이션
+3. `npx prisma studio`: DB GUI 실행
 
-## 📏 Coding Standards & Rules
-1. **Full-stack Patterns:** 데이터 읽기는 `loader`, 쓰기(POST/PUT/DELETE)는 `action` 함수 내에서 처리한다.
-2. **Form Handling:** 브라우저 기본 기능을 활용하는 Remix `<Form>` 컴포넌트를 우선 사용한다.
-3. **Type Safety:** 
-   - `useLoaderData<typeof loader>()`를 사용하여 서버 데이터를 완벽한 타입으로 추론한다.
-   - 모든 API 응답과 폼 데이터는 `zod` 스키마를 통해 검증한다.
-4. **Performance:** 
-   - React Compiler를 활성화하여 불필요한 렌더링 최적화 코드를 줄인다.
-   - 자산 계산 등 무거운 로직은 가급적 서버(loader)에서 처리하여 클라이언트로 전달한다.
-5. **Asset Formatting:** 금액 표기 시 원화(KRW) 기준 `Intl.NumberFormat` 유틸리티를 공통으로 사용한다.
-
-## 💰 Domain Specifics (Asset Management)
-- 실시간 자산 업데이트가 필요한 경우 Remix의 `shouldRevalidate` 옵션을 활용하여 효율적으로 데이터를 갱신한다.
-- 보안이 중요한 금융 데이터 처리는 반드시 서버측 `action`에서 검증 후 처리한다.
-
-## ⌨️ Code Style Guide (General & React)
-
-### 1. Naming Conventions
-- **Components:** `PascalCase` (예: `AssetDashboard.tsx`)
-- **Functions/Variables:** `camelCase` (예: `const totalBalance = ...`)
-- **Constants:** `UPPER_SNAKE_CASE` (예: `const MAX_LIMIT = 100`)
-- **Booleans:** `is`, `has`, `should` 접두사 사용 (예: `isLoaded`, `hasError`)
-- **Folder Names:** `kebab-case` (예: `components/asset-card/`)
-
-### 2. Component Structure
-- **Order:**
-  1. Imports (External -> Internal)
-  2. TypeScript Types/Interfaces
-  3. Component definition
-  4. Styled Components or Sub-components (if any)
-- **Functional Components:** 화살표 함수(`const MyComponent = () => {}`) 사용을 기본으로 한다.
-- **Props:** 구조 분해 할당(Destructuring)을 사용하여 선언부에서 명시한다.
-
-### 3. TypeScript Best Practices
-- `any` 사용을 절대 금지하며, 불분명한 경우 `unknown`을 사용한다.
-- Interface보다는 `type` 사용을 권장한다 (Remix/React 생태계 지향).
-- API 응답은 반드시 명시적인 타입을 정의한다.
-
-### 4. Logic & Clean Code
-- **Early Return:** 조건문은 가급적 일찍 반환(Return Early)하여 들여쓰기 깊이를 줄인다.
-- **Magic Numbers:** 의미를 알 수 없는 숫자는 상수로 선언하여 사용한다.
-- **Single Responsibility:** 하나의 함수/컴포넌트는 가급적 하나의 역할만 수행한다.
-
-### 5. Comments
-- 코드로 의도를 파악할 수 있도록 명확한 변수명을 짓고, 설명이 꼭 필요한 '이유(Why)' 위주로 주석을 작성한다.
-- JSDoc 스타일을 활용하여 복잡한 유틸리티 함수의 파라미터와 반환값을 명시한다.
-
-## 🚀 Development Workflow
-
-### 서버 실행
-```bash
-npm run dev
-```
-
-### 포트 충돌 시 대처
-1. 포트 사용 중인 프로세스 확인:
-   ```bash
-   lsof -ti:5174
-   lsof -ti:54321
-   ```
-
-2. 프로세스 종료:
-   ```bash
-   lsof -ti:5174 | xargs kill -9
-   lsof -ti:54321 | xargs kill -9
-   ```
-
-3. 서버 재시작:
-   ```bash
-   npm run dev
-   ```
-
-## 🔑 Environment Variables
-
-### Required Variables
-```bash
-# Database
-DATABASE_URL="postgresql://..."
-
-# Supabase (2025 최신)
-SUPABASE_URL="https://your-project-id.supabase.co"
-SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
-
-# Session
-SESSION_SECRET="random-secret-key"
-```
-
-### Optional Variables
-```bash
-# Supabase Secret Key (서버 전용, 필요시)
-SUPABASE_SECRET_KEY="sb_secret_..."
-```
+## 🔑 Environment Variables (.env)
+- `DATABASE_URL` / `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`
+- `SESSION_SECRET` / `DEV_MODE`

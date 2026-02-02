@@ -2,79 +2,42 @@
 trigger: always_on
 ---
 
-# Project Context: Asset Management Web (Remix / React Router v7)
+# Development Rules: Asset Management Web
 
-## 🔐 Git Identity & Environment
-- **GitHub Account:** `melong0124` (Personal Account)
-- **Local Git Config:** 반드시 로컬 설정(`git config --local`)을 사용하여 회사 계정과 격리한다.
-  - `user.name`: `melong0124`
-  - `user.email`: `melong0124@gmail.com`
-- **Authentication & Push: 
-  - 기본적으로 `gh auth switch`를 통해 계정을 전환하여 사용할 수 있으나, 인증 토큰 충돌 발생 시 아래 명령어로 강제 푸시한다.
-  - `git push -u "https://$(gh auth token)@github.com/melong0124/root-app.git" main` 
-  - **Email Privacy:** GitHub 설정에서 "Block command line pushes that expose my email" 옵션이 켜져 있을 경우 푸시가 거부될 수 있으므로 필요 시 해제한다.
-
-## 🛠 Core Technology Stack
-- **Framework:** Remix (React Router v7 Framework mode)
-- **Runtime:** Node.js (Vite-based compiler)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS + shadcn/ui
-- **Data Fetching:** Remix Loaders & Actions (Standard)
-- **State Management:** - Server-Client Sync: Remix Navigation State
-  - Client-only: Zustand (Optional, for UI local state)
-- **Validation:** Zod (Essential for Action data validation)
-- **Charts:** Recharts (for Financial Data Visualization)
-
-## 🗄️ Database & Backend (Supabase)
-- **ORM:** Prisma 또는 Drizzle ORM을 사용하여 타입 안전성을 확보한다.
-- **Auth:** Supabase Auth를 사용하며, Remix의 `loader`에서 세션을 체크한다.
-- **Security:** 모든 테이블에 RLS(Row Level Security)를 설정하여 본인의 자산 데이터만 조회 가능하도록 한다.
-
-## 📏 Coding Standards & Rules
-1. **Full-stack Patterns:** 데이터 읽기는 `loader`, 쓰기(POST/PUT/DELETE)는 `action` 함수 내에서 처리한다.
+## 📏 Coding Standards & Patterns
+1. **Full-stack Patterns:** 모든 데이터 연산은 Remix의 `loader`(읽기)와 `action`(쓰기)을 통해 처리한다.
 2. **Form Handling:** 브라우저 기본 기능을 활용하는 Remix `<Form>` 컴포넌트를 우선 사용한다.
-3. **Type Safety:** - `useLoaderData<typeof loader>()`를 사용하여 서버 데이터를 완벽한 타입으로 추론한다.
-   - 모든 API 응답과 폼 데이터는 `zod` 스키마를 통해 검증한다.
-4. **Performance:** - React Compiler를 활성화하여 불필요한 렌더링 최적화 코드를 줄인다.
-   - 자산 계산 등 무거운 로직은 가급적 서버(loader)에서 처리하여 클라이언트로 전달한다.
-5. **Asset Formatting:** 금액 표기 시 원화(KRW) 기준 `Intl.NumberFormat` 유틸리티를 공통으로 사용한다.
+3. **Type Safety:** 
+   - `useLoaderData<typeof loader>()`를 사용하여 서버 데이터를 완벽한 타입으로 추론한다.
+   - 모든 외부 데이터는 `zod` 스키마를 통해 검증한다.
+4. **Performance:** 불필요한 렌더링을 방지하기 위해 서버 측 처리를 우선하고 React Compiler를 활용한다.
 
 ## 💰 Domain Specifics (Asset Management)
-- 실시간 자산 업데이트가 필요한 경우 Remix의 `shouldRevalidate` 옵션을 활용하여 효율적으로 데이터를 갱신한다.
-- 보안이 중요한 금융 데이터 처리는 반드시 서버측 `action`에서 검증 후 처리한다.
-- **Date Handling & Timezone:** 
-  - Vercel(UTC)과 로컬(KST) 간의 시간대 차이로 인해 `Date.getTime()` 또는 DB 레벨의 날짜 필터링이 오작동할 수 있다.
-  - 날짜 비교 시에는 `Intl.DateTimeFormat`을 사용하여 **'Asia/Seoul' 시간대 기준의 문자열(예: 연. 월.)을 비교**하는 방식을 권장한다.
-  - Prisma 쿼리 시 중첩된 쿼리 안의 `where` 절 날짜 필터링(`include: { values: { where: ... } }`) 보다는, 전체 데이터를 가져온 후 JavaScript 단에서 시간대를 고려하여 필터링하는 것이 안전하다.
+- **Real-time Revalidation:** 자산 업데이트 시 `shouldRevalidate` 옵션을 적절히 활용한다.
+- **Security:** 모든 테이블은 Supabase RLS를 준수하며, 반드시 세션 체크 후 데이터를 처리한다.
+- **Date & Timezone:** 
+  - 날짜 비교 시 `Intl.DateTimeFormat`의 'Asia/Seoul' 기준 문자열 비교를 권장한다.
+  - Prisma 쿼리 내 직접 필터링보다 데이터 로드 후 JS 단에서 시간를 고려한 필터링이 안전하다.
+- **Data Testing Rule (CRITICAL):**
+  - 데이터를 테스트할 때는 반드시 **현재월을 초과하는 미래의 월**(예: 현재월이 2026년 2월이라면 2026년 3월 이후)만 사용한다.
+  - 현재월까지의 데이터는 실제 운영 데이터이므로 절대 수정하거나 삭제하지 않는다.
 
-## ⌨️ Code Style Guide (General & React)
-
-### 1. Naming Conventions
-- **Components:** `PascalCase` (예: `AssetDashboard.tsx`)
-- **Functions/Variables:** `camelCase` (예: `const totalBalance = ...`)
-- **Constants:** `UPPER_SNAKE_CASE` (예: `const MAX_LIMIT = 100`)
-- **Booleans:** `is`, `has`, `should` 접두사 사용 (예: `isLoaded`, `hasError`)
-- **Folder Names:** `kebab-case` (예: `components/asset-card/`)
+## ⌨️ Code Style Guide
+### 1. Naming
+- **Components:** `PascalCase`
+- **Functions/Variables:** `camelCase`
+- **Constants:** `UPPER_SNAKE_CASE`
+- **Booleans:** `is`, `has`, `should` 접두사 필수
 
 ### 2. Component Structure
-- **Order:**
-  1. Imports (External -> Internal)
-  2. TypeScript Types/Interfaces
-  3. Component definition
-  4. Styled Components or Sub-components (if any)
-- **Functional Components:** 화살표 함수(`const MyComponent = () => {}`) 사용을 기본으로 한다.
-- **Props:** 구조 분해 할당(Destructuring)을 사용하여 선언부에서 명시한다.
+- Imports (External -> Internal) -> Types -> Component definition -> Utils 순서로 작성한다.
+- 화살표 함수 구문을 사용하고 Props는 구조 분해 할당으로 선언한다.
 
-### 3. TypeScript Best Practices
-- `any` 사용을 절대 금지하며, 불분명한 경우 `unknown`을 사용한다.
-- Interface보다는 `type` 사용을 권장한다 (Remix/React 생태계 지향).
-- API 응답은 반드시 명시적인 타입을 정의한다.
+### 3. Logic & Clean Code
+- **Early Return:** 조건문은 가급적 일찍 반환하여 들여쓰기 깊이를 최소화한다.
+- **Single Responsibility:** 하나의 함수/컴포넌트는 하나의 명확한 역할만 수행한다.
+- **Comments:** '어떻게(How)'보다 '왜(Why)'를 설명하는 주석 위주로 작성한다.
 
-### 4. Logic & Clean Code
-- **Early Return:** 조건문은 가급적 일찍 반환(Return Early)하여 들여쓰기 깊이를 줄인다.
-- **Magic Numbers:** 의미를 알 수 없는 숫자는 상수로 선언하여 사용한다.
-- **Single Responsibility:** 하나의 함수/컴포넌트는 가급적 하나의 역할만 수행한다.
-
-### 5. Comments
-- 코드로 의도를 파악할 수 있도록 명확한 변수명을 짓고, 설명이 꼭 필요한 '이유(Why)' 위주로 주석을 작성한다.
-- JSDoc 스타일을 활용하여 복잡한 유틸리티 함수의 파라미터와 반환값을 명시한다.
+## 🔐 Git & Push Rules
+- 모든 푸시 시 계정 충돌 방지를 위해 `--local` 설정을 확인한다.
+- 이메일 노출 방지가 활성화된 경우 리플레이스먼트 이메일을 사용하거나 설정을 일시 조정하여 푸시한다.
